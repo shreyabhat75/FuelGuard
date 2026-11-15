@@ -4,10 +4,11 @@ import path from 'node:path'
 import fs from 'node:fs'
 import crypto from 'node:crypto'
 import { z } from 'zod'
-import { db } from '../db'
+import { sqlAll, sqlGet, sqlRun, withTransaction } from '../db'
 import { env } from '../env'
+import { ah } from '../asyncHandler'
 import { requireAuth, requireRole } from '../auth'
-import { serializeEntry, serializeCorrection, serializeFlag, serializeFlagNote, serializeEvidence } from '../serializers'
+import { serializeEntry, serializeEntries, serializeCorrection, serializeFlag, serializeFlagNote, serializeEvidence } from '../serializers'
 import { runEntryChecks } from '../rules'
 import { audit, entryScope, nextEntryId, nextFlagId, paged } from '../helpers'
 import { nowIso } from '../time'
@@ -68,7 +69,7 @@ const ENTRY_SELECT = `
 export const entriesRouter = Router()
 
 /** GET /api/fuel-entries — filtered, paginated list (driver scoped to own bus). */
-entriesRouter.get('/fuel-entries', requireAuth, (req, res) => {
+entriesRouter.get('/fuel-entries', requireAuth, ah(async (req, res) => {
   const user = req.user!
   const scope = entryScope(user)
   const clauses = [scope.where.replace(/^WHERE /, '')].filter(Boolean)
@@ -101,20 +102,19 @@ entriesRouter.get('/fuel-entries', requireAuth, (req, res) => {
   }
   const where = clauses.length ? ` WHERE ${clauses.join(' AND ')}` : ''
   const { page, pageSize, offset } = paged(req)
-  const total = (
-    db.prepare(`SELECT COUNT(*) AS n FROM fuel_entries e${where}`).get(...params) as { n: number }
-  ).n
-  const rows = db
-    .prepare(`${ENTRY_SELECT}${where} ORDER BY e.ts_client DESC LIMIT ? OFFSET ?`)
-    .all(...params, pageSize, offset) as Record<string, unknown>[]
-  res.json({ page, pageSize, total, entries: rows.map(serializeEntry) })
-})
+  const total = (await sqlGet<{ n: number }>(`SELECT COUNT(*) AS n FROM fuel_entries e${where}`, params))!.n
+  const rows = (await sqlAll<Record<string, unknown>>(
+    `${ENTRY_SELECT}${where} ORDER BY e.ts_client DESC LIMIT ? OFFSET ?`,
+    [...params, pageSize, offset],
+  )) as Record<string, unknown>[]
+  res.json({ page, pageSize, total, entries: await serializeEntries(rows) })
+}))
 
 /** POST /api/fuel-entries — create entry; rules may add flags but never block the save. */
 entriesRouter.post('/fuel-entries', requireAuth, requireRole('driver', 'transport_manager'), upload.fields([
   { name: 'odometerPhoto', maxCount: 1 },
   { name: 'receiptPhoto', maxCount: 1 },
-]), (req, res) => {
+]), ah(async (req, res) => {
   const user = req.user!
   const files = (req.files ?? {}) as Record<string, Express.Multer.File[]>
   const body: Record<string, unknown> = { ...req.body }
@@ -143,9 +143,9 @@ entriesRouter.post('/fuel-entries', requireAuth, requireRole('driver', 'transpor
   }
   const input = parsed.data
 
-  const bus = db.prepare('SELECT * FROM buses WHERE bus_code = ?').get(input.busCode) as
-    | { bus_code: string; tank_litres: number }
-    | undefined
+  const bus = await sqlGet<{ bus_code: string; tank_litres: number }>('SELECT * FROM buses WHERE bus_code = ?', [
+    input.busCode,
+  ])
   if (!bus) {
     res.status(404).json({ error: `Unknown bus ${input.busCode}` })
     return
@@ -157,148 +157,155 @@ entriesRouter.post('/fuel-entries', requireAuth, requireRole('driver', 'transpor
 
   // Offline sync idempotency: same clientRef returns the already-saved entry.
   if (input.clientRef) {
-    const existing = db
-      .prepare('SELECT id FROM fuel_entries WHERE client_ref = ?')
-      .get(input.clientRef) as { id: string } | undefined
+    const existing = await sqlGet<{ id: string }>('SELECT id FROM fuel_entries WHERE client_ref = ?', [
+      input.clientRef,
+    ])
     if (existing) {
-      const row = db.prepare(`${ENTRY_SELECT} WHERE e.id = ?`).get(existing.id) as Record<string, unknown>
-      res.json({ entry: serializeEntry(row), ruleHits: [], duplicate: true })
+      const row = (await sqlGet<Record<string, unknown>>(`${ENTRY_SELECT} WHERE e.id = ?`, [existing.id])) as Record<string, unknown>
+      res.json({ entry: await serializeEntry(row), ruleHits: [], duplicate: true })
       return
     }
   }
 
-  const id = nextEntryId()
+  const id = await nextEntryId()
   const tsServer = nowIso()
-  db.prepare(`
-    INSERT INTO fuel_entries (
-      id, bus_code, ts_client, ts_server, litres, amount, fuel_type, odometer_km, paid_by,
-      payment_mode, pump_name, bill_no, location_lat, location_lng, location_accuracy,
-      location_note, receipt_on_file, activity_notes, created_by, client_ref, source, status, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'app', 'saved', ?)`).run(
-    id,
-    input.busCode,
-    input.timestampClient,
-    tsServer,
-    input.litres,
-    input.amount,
-    input.fuelType,
-    input.odometerKm,
-    input.paidBy,
-    input.paymentMode,
-    input.pumpName,
-    input.billNo ?? null,
-    input.location?.lat ?? null,
-    input.location?.lng ?? null,
-    input.location?.accuracyM ?? null,
-    input.locationNote ?? null,
-    input.receiptOnFile === true ? 1 : null,
-    input.activityNotes?.length ? JSON.stringify(input.activityNotes) : null,
-    user.id,
-    input.clientRef ?? null,
-    tsServer,
-  )
-
-  // Evidence files (private storage; served via authenticated endpoint only).
-  const evidenceStmt = db.prepare(`
-    INSERT INTO evidence (id, entry_id, kind, file_path, file_name, mime, size, demo, created_by, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`)
-  for (const kind of ['odometer', 'receipt'] as const) {
-    const f = files[kind === 'odometer' ? 'odometerPhoto' : 'receiptPhoto']?.[0]
-    if (f) {
-      evidenceStmt.run(
-        crypto.randomUUID(),
-        id,
-        kind,
-        f.filename,
-        f.originalname || `${kind}.jpg`,
-        f.mimetype,
-        f.size,
-        user.id,
-        tsServer,
-      )
-    }
-  }
 
   // Detection: context = same-bus history (including the new entry).
-  const busEntries = db
-    .prepare('SELECT id, bus_code, ts_client, litres, amount, odometer_km, payment_mode FROM fuel_entries WHERE bus_code = ? ORDER BY ts_client DESC LIMIT 60')
-    .all(input.busCode) as Record<string, unknown>[]
-  const prices = db.prepare('SELECT date, price FROM diesel_prices ORDER BY date').all() as { date: string; price: number }[]
-  const holidays = db.prepare('SELECT date, holiday AS name FROM college_calendar').all() as { date: string; name: string }[]
-  const evidenceRows = db.prepare('SELECT kind FROM evidence WHERE entry_id = ?').all(id) as { kind: string }[]
+  const busEntries = (await sqlAll<Record<string, unknown>>(
+    'SELECT id, bus_code, ts_client, litres, amount, odometer_km, payment_mode FROM fuel_entries WHERE bus_code = ? ORDER BY ts_client DESC LIMIT 60',
+    [input.busCode],
+  )) as Record<string, unknown>[]
+  const prices = (await sqlAll<{ date: string; price: number }>('SELECT date, price FROM diesel_prices ORDER BY date')) as {
+    date: string
+    price: number
+  }[]
+  const holidays = (await sqlAll<{ date: string; name: string }>('SELECT date, holiday AS name FROM college_calendar')) as {
+    date: string
+    name: string
+  }[]
 
-  const hits = runEntryChecks(
-    {
-      id,
-      busCode: input.busCode,
-      tsClient: input.timestampClient,
-      litres: input.litres,
-      amount: input.amount,
-      paymentMode: input.paymentMode,
-      pumpName: input.pumpName,
-      odometerKm: input.odometerKm,
-      hasOdometerPhoto: evidenceRows.some((e) => e.kind === 'odometer'),
-      hasReceiptPhoto: evidenceRows.some((e) => e.kind === 'receipt'),
-      receiptOnFile: input.receiptOnFile,
-      locationLat: input.location?.lat ?? null,
-      locationNote: input.locationNote,
-    },
-    {
-      bus: { busCode: bus.bus_code, tankLitres: bus.tank_litres },
-      prices,
-      holidays,
-      busEntries: busEntries.map((e) => ({
-        id: String(e.id),
-        busCode: String(e.bus_code),
-        tsClient: String(e.ts_client),
-        litres: Number(e.litres),
-        amount: Number(e.amount),
-        odometerKm: Number(e.odometer_km),
-        paymentMode: String(e.payment_mode),
-      })),
-    },
-  )
-
+  const evidenceRows: { kind: string }[] = []
   const flagIds: string[] = []
-  const flagStmt = db.prepare(`
-    INSERT INTO flags (id, rule_code, title, bus_code, severity, reason, plain_explanation,
-      evidence_summary, entry_ids, bill_nos, amount_at_issue, confidence, figures, status, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', ?, 'Auto-generated at save time.', '[]', 'needs_review', ?)`)
-  for (const hit of hits) {
-    const flagId = nextFlagId()
-    flagIds.push(flagId)
-    flagStmt.run(
-      flagId,
-      hit.code,
-      `${input.busCode} — ${TITLE_BY_CODE[hit.code] ?? hit.code}`,
-      input.busCode,
-      hit.severity,
-      hit.reason,
-      hit.explanation,
-      hit.evidence,
-      JSON.stringify([id]),
-      hit.amountAtIssue,
-      tsServer,
-    )
-    audit('flag', flagId, 'created', { id: null, name: 'FleetFuel Guard (auto)' }, { after: `${hit.code} on ${id}` })
-  }
+  let ruleHits: ReturnType<typeof runEntryChecks> = []
 
-  const status = hits.length > 0 ? 'needs_review' : 'saved'
-  if (hits.length > 0) {
-    db.prepare('UPDATE fuel_entries SET status = ? WHERE id = ?').run(status, id)
-  }
-  audit('entry', id, 'created', { id: user.id, name: user.name }, {
-    after: `${input.litres.toFixed(1)} L, ₹${input.amount.toFixed(2)} at ${input.pumpName}`,
+  await withTransaction(async () => {
+    await sqlRun(
+      `INSERT INTO fuel_entries (
+        id, bus_code, ts_client, ts_server, litres, amount, fuel_type, odometer_km, paid_by,
+        payment_mode, pump_name, bill_no, location_lat, location_lng, location_accuracy,
+        location_note, receipt_on_file, activity_notes, created_by, client_ref, source, status, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'app', 'saved', ?)`,
+      [
+        id,
+        input.busCode,
+        input.timestampClient,
+        tsServer,
+        input.litres,
+        input.amount,
+        input.fuelType,
+        input.odometerKm,
+        input.paidBy,
+        input.paymentMode,
+        input.pumpName,
+        input.billNo ?? null,
+        input.location?.lat ?? null,
+        input.location?.lng ?? null,
+        input.location?.accuracyM ?? null,
+        input.locationNote ?? null,
+        input.receiptOnFile === true ? 1 : null,
+        input.activityNotes?.length ? JSON.stringify(input.activityNotes) : null,
+        user.id,
+        input.clientRef ?? null,
+        tsServer,
+      ],
+    )
+
+    // Evidence files (private storage; served via authenticated endpoint only).
+    for (const kind of ['odometer', 'receipt'] as const) {
+      const f = files[kind === 'odometer' ? 'odometerPhoto' : 'receiptPhoto']?.[0]
+      if (f) {
+        evidenceRows.push({ kind })
+        await sqlRun(
+          `INSERT INTO evidence (id, entry_id, kind, file_path, file_name, mime, size, demo, created_by, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
+          [crypto.randomUUID(), id, kind, f.filename, f.originalname || `${kind}.jpg`, f.mimetype, f.size, user.id, tsServer],
+        )
+      }
+    }
+
+    const hits = (ruleHits = runEntryChecks(
+      {
+        id,
+        busCode: input.busCode,
+        tsClient: input.timestampClient,
+        litres: input.litres,
+        amount: input.amount,
+        paymentMode: input.paymentMode,
+        pumpName: input.pumpName,
+        odometerKm: input.odometerKm,
+        hasOdometerPhoto: evidenceRows.some((e) => e.kind === 'odometer'),
+        hasReceiptPhoto: evidenceRows.some((e) => e.kind === 'receipt'),
+        receiptOnFile: input.receiptOnFile,
+        locationLat: input.location?.lat ?? null,
+        locationNote: input.locationNote,
+      },
+      {
+        bus: { busCode: bus.bus_code, tankLitres: bus.tank_litres },
+        prices,
+        holidays,
+        busEntries: busEntries.map((e) => ({
+          id: String(e.id),
+          busCode: String(e.bus_code),
+          tsClient: String(e.ts_client),
+          litres: Number(e.litres),
+          amount: Number(e.amount),
+          odometerKm: Number(e.odometer_km),
+          paymentMode: String(e.payment_mode),
+        })),
+      },
+    ))
+
+    for (const hit of hits) {
+      const flagId = await nextFlagId()
+      flagIds.push(flagId)
+      await sqlRun(
+        `INSERT INTO flags (id, rule_code, title, bus_code, severity, reason, plain_explanation,
+          evidence_summary, entry_ids, bill_nos, amount_at_issue, confidence, figures, status, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', ?, 'Auto-generated at save time.', '[]', 'needs_review', ?)`,
+        [
+          flagId,
+          hit.code,
+          `${input.busCode} — ${TITLE_BY_CODE[hit.code] ?? hit.code}`,
+          input.busCode,
+          hit.severity,
+          hit.reason,
+          hit.explanation,
+          hit.evidence,
+          JSON.stringify([id]),
+          hit.amountAtIssue,
+          tsServer,
+        ],
+      )
+      await audit('flag', flagId, 'created', { id: null, name: 'FleetFuel Guard (auto)' }, { after: `${hit.code} on ${id}` })
+    }
+
+    if (hits.length > 0) {
+      await sqlRun('UPDATE fuel_entries SET status = ? WHERE id = ?', ['needs_review', id])
+    }
+    await audit('entry', id, 'created', { id: user.id, name: user.name }, {
+      after: `${input.litres.toFixed(1)} L, ₹${input.amount.toFixed(2)} at ${input.pumpName}`,
+    })
   })
 
-  const row = db.prepare(`${ENTRY_SELECT} WHERE e.id = ?`).get(id) as Record<string, unknown>
-  res.status(201).json({ entry: serializeEntry(row), ruleHits: hits, flagIds })
-})
+  const row = (await sqlGet<Record<string, unknown>>(`${ENTRY_SELECT} WHERE e.id = ?`, [id])) as Record<string, unknown>
+  const savedEntry = await serializeEntry(row)
+  res.status(201).json({ entry: savedEntry, ruleHits, flagIds })
+}))
 
 /** GET /api/fuel-entries/:id — full detail: entry, flags, notes, corrections, timeline. */
-entriesRouter.get('/fuel-entries/:id', requireAuth, (req, res) => {
+entriesRouter.get('/fuel-entries/:id', requireAuth, ah(async (req, res) => {
   const user = req.user!
-  const row = db.prepare(`${ENTRY_SELECT} WHERE e.id = ?`).get(req.params.id) as
+  const row = (await sqlGet<Record<string, unknown>>(`${ENTRY_SELECT} WHERE e.id = ?`, [req.params.id])) as
     | Record<string, unknown>
     | undefined
   if (!row) {
@@ -309,29 +316,34 @@ entriesRouter.get('/fuel-entries/:id', requireAuth, (req, res) => {
     res.status(403).json({ error: 'Not your bus' })
     return
   }
-  const allFlags = (db.prepare('SELECT * FROM flags ORDER BY created_at').all() as Record<string, unknown>[]).filter(
+  const allFlags = ((await sqlAll<Record<string, unknown>>('SELECT * FROM flags ORDER BY created_at')) as Record<string, unknown>[]).filter(
     (f) => (JSON.parse(String(f.entry_ids)) as string[]).includes(req.params.id),
   )
   const flagIds = allFlags.map((f) => String(f.id))
   const notes = flagIds.length
-    ? (db.prepare(`SELECT * FROM flag_notes WHERE flag_id IN (${flagIds.map(() => '?').join(',')}) ORDER BY created_at`).all(...flagIds) as Record<string, unknown>[])
+    ? ((await sqlAll<Record<string, unknown>>(
+        `SELECT * FROM flag_notes WHERE flag_id IN (${flagIds.map(() => '?').join(',')}) ORDER BY created_at`,
+        flagIds,
+      )) as Record<string, unknown>[])
     : []
-  const corrections = db
-    .prepare('SELECT * FROM corrections WHERE entry_id = ? ORDER BY created_at')
-    .all(req.params.id) as Record<string, unknown>[]
-  const timeline = db
-    .prepare('SELECT * FROM audit_events WHERE entity_type = ? AND entity_id = ? ORDER BY created_at DESC')
-    .all('entry', req.params.id) as Record<string, unknown>[]
+  const corrections = (await sqlAll<Record<string, unknown>>(
+    'SELECT * FROM corrections WHERE entry_id = ? ORDER BY created_at',
+    [req.params.id],
+  )) as Record<string, unknown>[]
+  const timeline = (await sqlAll<Record<string, unknown>>(
+    'SELECT * FROM audit_events WHERE entity_type = ? AND entity_id = ? ORDER BY created_at DESC',
+    ['entry', req.params.id],
+  )) as Record<string, unknown>[]
 
   if (user.role !== 'driver') {
-    audit('entry', req.params.id, 'viewed', { id: user.id, name: user.name })
+    await audit('entry', req.params.id, 'viewed', { id: user.id, name: user.name })
   }
 
   res.json({
-    entry: serializeEntry(row),
-    flags: allFlags.map(serializeFlag),
+    entry: await serializeEntry(row),
+    flags: await Promise.all(allFlags.map(serializeFlag)),
     notes: notes.map(serializeFlagNote),
-    corrections: corrections.map(serializeCorrection),
+    corrections: await Promise.all(corrections.map(serializeCorrection)),
     timeline: timeline.map((a) => ({
       id: String(a.id),
       entityType: 'entry',
@@ -345,10 +357,10 @@ entriesRouter.get('/fuel-entries/:id', requireAuth, (req, res) => {
       timestamp: a.created_at,
     })),
   })
-})
+}))
 
 /** POST /api/fuel-entries/:id/corrections — append-only correction proposal. */
-entriesRouter.post('/fuel-entries/:id/corrections', requireAuth, requireRole('transport_manager'), (req, res) => {
+entriesRouter.post('/fuel-entries/:id/corrections', requireAuth, requireRole('transport_manager'), ah(async (req, res) => {
   const user = req.user!
   const schema = z.object({
     field: z.enum(['litres', 'amount', 'odometerKm']),
@@ -360,7 +372,7 @@ entriesRouter.post('/fuel-entries/:id/corrections', requireAuth, requireRole('tr
     res.status(400).json({ error: 'Invalid correction', details: parsed.error.flatten() })
     return
   }
-  const entry = db.prepare('SELECT * FROM fuel_entries WHERE id = ?').get(req.params.id) as
+  const entry = (await sqlGet<Record<string, unknown>>('SELECT * FROM fuel_entries WHERE id = ?', [req.params.id])) as
     | Record<string, unknown>
     | undefined
   if (!entry) {
@@ -369,33 +381,26 @@ entriesRouter.post('/fuel-entries/:id/corrections', requireAuth, requireRole('tr
   }
   const originalValue = Number(entry[parsed.data.field === 'odometerKm' ? 'odometer_km' : parsed.data.field])
   const id = `COR-${crypto.randomBytes(4).toString('hex').toUpperCase()}`
-  db.prepare(`
-    INSERT INTO corrections (id, entry_id, field, original_value, proposed_value, reason, proposed_by, status, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?)`).run(
-    id,
-    req.params.id,
-    parsed.data.field,
-    String(originalValue),
-    String(parsed.data.proposedValue),
-    parsed.data.reason,
-    user.id,
-    nowIso(),
+  await sqlRun(
+    `INSERT INTO corrections (id, entry_id, field, original_value, proposed_value, reason, proposed_by, status, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?)`,
+    [id, req.params.id, parsed.data.field, String(originalValue), String(parsed.data.proposedValue), parsed.data.reason, user.id, nowIso()],
   )
-  audit('entry', req.params.id, 'correction_proposed', { id: user.id, name: user.name }, {
+  await audit('entry', req.params.id, 'correction_proposed', { id: user.id, name: user.name }, {
     after: `${parsed.data.field}: ${originalValue} → ${parsed.data.proposedValue}`,
     reason: parsed.data.reason,
   })
-  const row = db.prepare('SELECT * FROM corrections WHERE id = ?').get(id) as Record<string, unknown>
-  res.status(201).json({ correction: serializeCorrection(row) })
-})
+  const row = (await sqlGet<Record<string, unknown>>('SELECT * FROM corrections WHERE id = ?', [id])) as Record<string, unknown>
+  res.status(201).json({ correction: await serializeCorrection(row) })
+}))
 
 /** POST /api/fuel-entries/:id/evidence — attach photos after the fact (retry path). */
 entriesRouter.post('/fuel-entries/:id/evidence', requireAuth, requireRole('driver', 'transport_manager'), upload.fields([
   { name: 'odometerPhoto', maxCount: 1 },
   { name: 'receiptPhoto', maxCount: 1 },
-]), (req, res) => {
+]), ah(async (req, res) => {
   const user = req.user!
-  const entry = db.prepare('SELECT * FROM fuel_entries WHERE id = ?').get(req.params.id) as
+  const entry = (await sqlGet<Record<string, unknown>>('SELECT * FROM fuel_entries WHERE id = ?', [req.params.id])) as
     | Record<string, unknown>
     | undefined
   if (!entry) {
@@ -412,34 +417,35 @@ entriesRouter.post('/fuel-entries/:id/evidence', requireAuth, requireRole('drive
     const f = files[kind === 'odometer' ? 'odometerPhoto' : 'receiptPhoto']?.[0]
     if (!f) continue
     const evidenceId = crypto.randomUUID()
-    db.prepare(`
-      INSERT INTO evidence (id, entry_id, kind, file_path, file_name, mime, size, demo, created_by, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`).run(
-      evidenceId, req.params.id, kind, f.filename, f.originalname || `${kind}.jpg`, f.mimetype, f.size, user.id, nowIso(),
+    await sqlRun(
+      `INSERT INTO evidence (id, entry_id, kind, file_path, file_name, mime, size, demo, created_by, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
+      [evidenceId, req.params.id, kind, f.filename, f.originalname || `${kind}.jpg`, f.mimetype, f.size, user.id, nowIso()],
     )
     out.push({ id: evidenceId, kind })
   }
-  audit('entry', req.params.id, 'synced', { id: user.id, name: user.name }, {
+  await audit('entry', req.params.id, 'synced', { id: user.id, name: user.name }, {
     after: out.length ? `Evidence attached: ${out.map((o) => o.kind).join(', ')}` : 'No files provided',
   })
-  const evidenceRows = db.prepare('SELECT * FROM evidence WHERE entry_id = ?').all(req.params.id) as Record<string, unknown>[]
+  const evidenceRows = (await sqlAll<Record<string, unknown>>('SELECT * FROM evidence WHERE entry_id = ?', [
+    req.params.id,
+  ])) as Record<string, unknown>[]
   res.status(201).json({ evidence: evidenceRows.map(serializeEvidence), attached: out })
-})
+}))
 
 /** GET /api/evidence/:id/file — private download (auth required, driver scoped). */
-entriesRouter.get('/evidence/:id/file', requireAuth, (req, res) => {
+entriesRouter.get('/evidence/:id/file', requireAuth, ah(async (req, res) => {
   const user = req.user!
-  const ev = db.prepare('SELECT * FROM evidence WHERE id = ?').get(req.params.id) as
-    | { id: string; entry_id: string; file_path: string; mime: string; demo: number }
-    | undefined
+  const ev = await sqlGet<{ id: string; entry_id: string; file_path: string; mime: string; demo: number }>(
+    'SELECT * FROM evidence WHERE id = ?',
+    [req.params.id],
+  )
   if (!ev) {
     res.status(404).json({ error: 'Evidence not found' })
     return
   }
   if (user.role === 'driver') {
-    const entry = db.prepare('SELECT bus_code FROM fuel_entries WHERE id = ?').get(ev.entry_id) as
-      | { bus_code: string }
-      | undefined
+    const entry = await sqlGet<{ bus_code: string }>('SELECT bus_code FROM fuel_entries WHERE id = ?', [ev.entry_id])
     if (!entry || entry.bus_code !== user.busCode) {
       res.status(403).json({ error: 'Not your bus' })
       return
@@ -457,4 +463,4 @@ entriesRouter.get('/evidence/:id/file', requireAuth, (req, res) => {
   res.setHeader('Content-Type', ev.mime)
   res.setHeader('Content-Disposition', `inline; filename="${path.basename(filePath)}"`)
   fs.createReadStream(filePath).pipe(res)
-})
+}))

@@ -1,4 +1,4 @@
-import { db } from './db'
+import { sqlAll, sqlGet } from './db'
 import { isoIST } from './time'
 import type { StatementLine } from './reconcile'
 
@@ -57,10 +57,10 @@ export function serializeEvidence(e: Row): ApiPhoto {
   }
 }
 
-export function serializeEntry(e: Row) {
-  const evidence = db
-    .prepare('SELECT * FROM evidence WHERE entry_id = ? ORDER BY created_at')
-    .all(s(e.id)) as Row[]
+export async function serializeEntry(e: Row) {
+  const evidence = (await sqlAll<Row>('SELECT * FROM evidence WHERE entry_id = ? ORDER BY created_at', [
+    s(e.id),
+  ])) as Row[]
   const odometer = evidence.find((x) => s(x.kind) === 'odometer')
   const receipt = evidence.find((x) => s(x.kind) === 'receipt')
   const location =
@@ -94,12 +94,16 @@ export function serializeEntry(e: Row) {
   }
 }
 
-export function serializeFlag(f: Row) {
+export async function serializeEntries(rows: Row[]) {
+  return Promise.all(rows.map(serializeEntry))
+}
+
+export async function serializeFlag(f: Row) {
   const entryIds = j<string[]>(f.entry_ids, [])
   const billNos = j<string[]>(f.bill_nos, [])
   const targetType = entryIds.length > 0 ? (billNos.length > 0 ? 'register_pair' : 'entry') : 'statement'
   const resolvedBy = f.resolved_by
-    ? (db.prepare('SELECT name FROM users WHERE id = ?').get(s(f.resolved_by)) as Row | undefined)
+    ? await sqlGet<Row>('SELECT name FROM users WHERE id = ?', [s(f.resolved_by) as string])
     : undefined
   return {
     id: s(f.id),
@@ -135,9 +139,9 @@ export function serializeFlagNote(x: Row) {
   }
 }
 
-export function serializeApproval(a: Row) {
+export async function serializeApproval(a: Row) {
   const decidedBy = a.decided_by
-    ? (db.prepare('SELECT name FROM users WHERE id = ?').get(s(a.decided_by)) as Row | undefined)
+    ? await sqlGet<Row>('SELECT name FROM users WHERE id = ?', [s(a.decided_by) as string])
     : undefined
   return {
     id: s(a.id),
@@ -159,8 +163,8 @@ export function serializeApproval(a: Row) {
   }
 }
 
-export function serializeCorrection(c: Row) {
-  const proposer = db.prepare('SELECT name FROM users WHERE id = ?').get(s(c.proposed_by)) as Row | undefined
+export async function serializeCorrection(c: Row) {
+  const proposer = await sqlGet<Row>('SELECT name FROM users WHERE id = ?', [s(c.proposed_by) as string])
   return {
     id: s(c.id),
     entryId: s(c.entry_id),
@@ -231,8 +235,9 @@ export function serializeReconciliation(r: ReconLike) {
   }
 }
 
-export function loadStatementLines(): StatementLine[] {
-  return (db.prepare('SELECT * FROM pump_statement_lines ORDER BY date, bill_no').all() as Row[]).map(
+export async function loadStatementLines(): Promise<StatementLine[]> {
+  const rows = (await sqlAll<Row>('SELECT * FROM pump_statement_lines ORDER BY date, bill_no')) as Row[]
+  return rows.map(
     (l): StatementLine => ({
       billNo: s(l.bill_no) as string,
       date: s(l.date) as string,

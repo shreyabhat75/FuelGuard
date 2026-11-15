@@ -1,15 +1,15 @@
 /**
  * Idempotent import of all seven supplied CSVs + seed of demo accounts,
  * seeded investigation cases (findings), reviewer decisions and audit trail.
- * Every write uses a natural unique key with INSERT OR IGNORE / upsert,
- * so re-running this never duplicates rows.
+ * Every write uses a natural unique key with ON CONFLICT DO NOTHING / upsert,
+ * so re-running this never duplicates rows — on either engine.
  */
 import fs from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import bcrypt from 'bcryptjs'
 import { env } from './env'
-import { db, migrate } from './db'
+import { bulkInsert, connectDb, dialect, migrate, sqlGet, sqlRun, withTransaction } from './db'
 import { csvObjects, normaliseDdMmYyyy, num } from './csv'
 import { nowIso } from './time'
 
@@ -30,149 +30,125 @@ const normRegisterTs = (ts: string): string => {
   return `${m[1]} ${m[2]}:${m[3] ?? '00'}`
 }
 
-export function importBuses(): number {
+export async function importBuses(): Promise<number> {
   const rows = readCsv('buses.csv')
-  const stmt = db.prepare(`
-    INSERT INTO buses (bus_code, reg_no, tank_litres, fuel_type, seats, driver_name, gps_device, created_at)
-    VALUES (@bus_code, @reg_no, @tank_litres, @fuel_type, @seats, @driver_name, @gps_device, @created_at)
-    ON CONFLICT (bus_code) DO NOTHING`)
-  let n = 0
-  const tx = db.transaction(() => {
-    for (const r of rows) {
-      const res = stmt.run({
-        bus_code: r.bus_code,
-        reg_no: r.reg_no,
-        tank_litres: num(r.tank_litres, 0),
-        fuel_type: r.fuel_type || 'diesel',
-        seats: num(r.seats, 0),
-        driver_name: r.driver_name,
-        gps_device: r.gps_device,
-        created_at: nowIso(),
-      })
-      if (res.changes > 0) n++
-    }
-  })
-  tx()
-  return n
+  const now = nowIso()
+  return bulkInsert(
+    'buses',
+    ['bus_code', 'reg_no', 'tank_litres', 'fuel_type', 'seats', 'driver_name', 'gps_device', 'created_at'],
+    rows.map((r) => [
+      r.bus_code,
+      r.reg_no,
+      num(r.tank_litres, 0),
+      r.fuel_type || 'diesel',
+      num(r.seats, 0),
+      r.driver_name,
+      r.gps_device,
+      now,
+    ]),
+  )
 }
 
 const DEMO_PASSWORD = 'demo123'
 
-export function seedUsers(): void {
+export async function seedUsers(): Promise<void> {
   const hash = bcrypt.hashSync(DEMO_PASSWORD, 10)
   const systemHash = bcrypt.hashSync(bcrypt.genSaltSync(12), 10) // not login-able
-  const stmt = db.prepare(`
-    INSERT INTO users (id, username, name, role, bus_code, password_hash, active, created_at)
-    VALUES (@id, @username, @name, @role, @bus_code, @password_hash, @active, @created_at)
-    ON CONFLICT (id) DO NOTHING`)
-  const users = [
-    { id: 'U-SYS', username: 'system', name: 'Import System', role: 'admin', bus_code: null, password_hash: systemHash, active: 0 },
-    { id: 'U-DRV-07', username: 'driver', name: 'Hanumanthappa G', role: 'driver', bus_code: 'VB-07', password_hash: hash, active: 1 },
-    { id: 'U-TM', username: 'manager', name: 'Ravi S', role: 'transport_manager', bus_code: null, password_hash: hash, active: 1 },
-    { id: 'U-ACC', username: 'accountant', name: 'Lakshmi Devi', role: 'accountant', bus_code: null, password_hash: hash, active: 1 },
-    { id: 'U-PRIN', username: 'principal', name: 'Dr. Suresh Rao', role: 'principal', bus_code: null, password_hash: hash, active: 1 },
-    { id: 'U-ADMIN', username: 'admin', name: 'System Admin', role: 'admin', bus_code: null, password_hash: hash, active: 1 },
+  const users: [string, string, string, string, string | null, string, number][] = [
+    ['U-SYS', 'system', 'Import System', 'admin', null, systemHash, 0],
+    ['U-DRV-07', 'driver', 'Hanumanthappa G', 'driver', 'VB-07', hash, 1],
+    ['U-TM', 'manager', 'Ravi S', 'transport_manager', null, hash, 1],
+    ['U-ACC', 'accountant', 'Lakshmi Devi', 'accountant', null, hash, 1],
+    ['U-PRIN', 'principal', 'Dr. Suresh Rao', 'principal', null, hash, 1],
+    ['U-ADMIN', 'admin', 'System Admin', 'admin', null, hash, 1],
   ]
-  db.transaction(() => {
-    for (const u of users) stmt.run({ ...u, created_at: nowIso() })
-  })()
-}
-
-export function importRegister(): number {
-  const rows = readCsv('fuel_register.csv')
-  const stmt = db.prepare(`
-    INSERT INTO fuel_entries (
-      id, bus_code, ts_client, ts_server, litres, amount, fuel_type, odometer_km,
-      paid_by, payment_mode, pump_name, bill_no, receipt_on_file, created_by,
-      source, status, created_at
-    ) VALUES (
-      @id, @bus_code, @ts_client, @ts_server, @litres, @amount, @fuel_type, @odometer_km,
-      @paid_by, @payment_mode, @pump_name, @bill_no, @receipt_on_file, @created_by,
-      'register', 'saved', @created_at
-    ) ON CONFLICT (id) DO NOTHING`)
-  let n = 0
-  db.transaction(() => {
-    for (const r of rows) {
-      const res = stmt.run({
-        id: r.entry_id,
-        bus_code: r.bus_code,
-        ts_client: normRegisterTs(r.timestamp),
-        ts_server: nowIso(),
-        litres: num(r.litres, 0),
-        amount: num(r.amount_rs, 0),
-        fuel_type: r.fuel_type || 'diesel',
-        odometer_km: num(r.odometer_km, 0),
-        paid_by: r.paid_by || null,
-        payment_mode: r.payment_mode === 'cash' ? 'cash' : 'credit_account',
-        pump_name: r.pump_name,
-        bill_no: r.bill_no && r.bill_no !== '' ? r.bill_no : null,
-        receipt_on_file: r.receipt_on_file === 'Y' ? 1 : 0,
-        created_by: 'U-SYS',
-        created_at: nowIso(),
-      })
-      if (res.changes > 0) n++
+  const now = nowIso()
+  await withTransaction(async () => {
+    for (const [id, username, name, role, bus_code, password_hash, active] of users) {
+      await sqlRun(
+        `INSERT INTO users (id, username, name, role, bus_code, password_hash, active, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT (id) DO NOTHING`,
+        [id, username, name, role, bus_code, password_hash, active, now],
+      )
     }
-  })()
-  return n
+  })
 }
 
-export function importStatement(): { lines: number; fileId: string } {
+export async function importRegister(): Promise<number> {
+  const rows = readCsv('fuel_register.csv')
+  const tsServer = nowIso()
+  return bulkInsert(
+    'fuel_entries',
+    [
+      'id', 'bus_code', 'ts_client', 'ts_server', 'litres', 'amount', 'fuel_type', 'odometer_km',
+      'paid_by', 'payment_mode', 'pump_name', 'bill_no', 'receipt_on_file', 'created_by',
+      'source', 'status', 'created_at',
+    ],
+    rows.map((r) => [
+      r.entry_id,
+      r.bus_code,
+      normRegisterTs(r.timestamp),
+      tsServer,
+      num(r.litres, 0),
+      num(r.amount_rs, 0),
+      r.fuel_type || 'diesel',
+      num(r.odometer_km, 0),
+      r.paid_by || null,
+      r.payment_mode === 'cash' ? 'cash' : 'credit_account',
+      r.pump_name,
+      r.bill_no && r.bill_no !== '' ? r.bill_no : null,
+      r.receipt_on_file === 'Y' ? 1 : 0,
+      'U-SYS',
+      'register',
+      'saved',
+      tsServer,
+    ]),
+  )
+}
+
+export async function importStatement(): Promise<{ lines: number; fileId: string }> {
   const rows = readCsv('pump_statement_shree_lakshmi.csv')
   const fileId = 'STMT-SLF-IMPORT'
-  db.prepare(`
-    INSERT INTO pump_statement_files (id, file_name, uploaded_by, uploaded_at, line_count)
-    VALUES (?, ?, ?, ?, ?)
-    ON CONFLICT (id) DO UPDATE SET line_count = excluded.line_count`)
-    .run(fileId, 'pump_statement_shree_lakshmi.csv', 'U-ACC', nowIso(), rows.length)
-  const stmt = db.prepare(`
-    INSERT INTO pump_statement_lines (bill_no, file_id, date, vehicle_no, litres, rate, amount)
-    VALUES (@bill_no, @file_id, @date, @vehicle_no, @litres, @rate, @amount)
-    ON CONFLICT (bill_no) DO NOTHING`)
-  let n = 0
-  db.transaction(() => {
-    for (const r of rows) {
-      const res = stmt.run({
-        bill_no: r.bill_no,
-        file_id: fileId,
-        date: normaliseDdMmYyyy(r.date),
-        vehicle_no: r.vehicle_no,
-        litres: num(r.litres, 0),
-        rate: num(r.rate, 0),
-        amount: num(r.amount, 0),
-      })
-      if (res.changes > 0) n++
-    }
-  })()
-  return { lines: n, fileId }
+  await sqlRun(
+    `INSERT INTO pump_statement_files (id, file_name, uploaded_by, uploaded_at, line_count)
+     VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT (id) DO UPDATE SET line_count = excluded.line_count`,
+    [fileId, 'pump_statement_shree_lakshmi.csv', 'U-ACC', nowIso(), rows.length],
+  )
+  const lines = await bulkInsert(
+    'pump_statement_lines',
+    ['bill_no', 'file_id', 'date', 'vehicle_no', 'litres', 'rate', 'amount'],
+    rows.map((r) => [
+      r.bill_no,
+      fileId,
+      normaliseDdMmYyyy(r.date),
+      r.vehicle_no,
+      num(r.litres, 0),
+      num(r.rate, 0),
+      num(r.amount, 0),
+    ]),
+  )
+  return { lines, fileId }
 }
 
-export function importReference(): void {
-  const priceStmt = db.prepare(`
-    INSERT INTO diesel_prices (date, price) VALUES (?, ?) ON CONFLICT (date) DO NOTHING`)
-  const holidayStmt = db.prepare(`
-    INSERT INTO college_calendar (date, holiday) VALUES (?, ?) ON CONFLICT (date) DO NOTHING`)
-  const placeStmt = db.prepare(`
-    INSERT INTO places (place, lat, lng) VALUES (?, ?, ?) ON CONFLICT (place) DO NOTHING`)
-  db.transaction(() => {
-    for (const r of readCsv('diesel_price.csv')) priceStmt.run(r.date, num(r.diesel_rs_per_litre, 0))
-    for (const r of readCsv('college_calendar.csv')) holidayStmt.run(r.date, r.holiday)
-    for (const r of readCsv('places.csv')) placeStmt.run(r.place, num(r.lat, 0), num(r.lng, 0))
-  })()
+export async function importReference(): Promise<void> {
+  const priceRows = readCsv('diesel_price.csv').map((r) => [r.date, num(r.diesel_rs_per_litre, 0)])
+  await bulkInsert('diesel_prices', ['date', 'price'], priceRows)
+  const holidayRows = readCsv('college_calendar.csv').map((r) => [r.date, r.holiday])
+  await bulkInsert('college_calendar', ['date', 'holiday'], holidayRows)
+  const placeRows = readCsv('places.csv').map((r) => [r.place, num(r.lat, 0), num(r.lng, 0)])
+  await bulkInsert('places', ['place', 'lat', 'lng'], placeRows)
 }
 
-export function importGpsPings(): number {
+export async function importGpsPings(): Promise<number> {
   const rows = readCsv('gps_pings.csv')
-  const stmt = db.prepare(`
-    INSERT INTO gps_pings (bus_code, ts, lat, lng) VALUES (?, ?, ?, ?)
-    ON CONFLICT (bus_code, ts) DO NOTHING`)
-  let n = 0
-  db.transaction(() => {
-    for (const r of rows) {
-      const res = stmt.run(r.bus_code, normRegisterTs(r.timestamp), num(r.lat, 0), num(r.lng, 0))
-      if (res.changes > 0) n++
-    }
-  })()
-  return n
+  return bulkInsert(
+    'gps_pings',
+    ['bus_code', 'ts', 'lat', 'lng'],
+    rows.map((r) => [r.bus_code, normRegisterTs(r.timestamp), num(r.lat, 0), num(r.lng, 0)]),
+    500,
+  )
 }
 
 /* ------------------------------------------------------------------ */
@@ -499,51 +475,75 @@ const SEEDED_AUDIT = [
   { entity_type: 'flag', entity_id: 'FLG-06', action: 'status_changed', before: 'needs_review', after: 'needs_review', reason: 'Preliminary look — awaiting pump confirmation', actor_id: 'U-TM', actor_name: 'Ravi S', created_at: '2026-10-27T17:00:00+05:30' },
 ]
 
-export function seedFlagsAndCases(): void {
-  const flagStmt = db.prepare(`
-    INSERT INTO flags (id, rule_code, title, bus_code, severity, reason, plain_explanation,
-      evidence_summary, entry_ids, bill_nos, amount_at_issue, confidence, figures, status, created_at)
-    VALUES (@id, @rule_code, @title, @bus_code, @severity, @reason, @plain_explanation,
-      @evidence_summary, @entry_ids, @bill_nos, @amount_at_issue, @confidence, @figures, 'needs_review', @created_at)
-    ON CONFLICT (id) DO NOTHING`)
-  const noteStmt = db.prepare(`
-    INSERT INTO flag_notes (id, flag_id, author_id, author_name, author_role, text, created_at)
-    VALUES (@id, @flag_id, @author_id, @author_name, @author_role, @text, @created_at)
-    ON CONFLICT (id) DO NOTHING`)
-  const approvalStmt = db.prepare(`
-    INSERT INTO approvals (id, target_type, target_id, title, bus_code, amount, submitter_id,
-      submitter_name, submitter_role, evidence_summary, review_notes, created_at)
-    VALUES (@id, @target_type, @target_id, @title, @bus_code, @amount, @submitter_id,
-      @submitter_name, @submitter_role, @evidence_summary, @review_notes, @created_at)
-    ON CONFLICT (id) DO NOTHING`)
-  const reconStmt = db.prepare(`
-    INSERT INTO reconciliation_results (bill_no, match_status, difference, reviewer_decision,
-      reviewer_note, reviewed_by, reviewed_at, reviewed_at_ts)
-    VALUES (@bill_no, @match_status, @difference, @reviewer_decision, @reviewer_note, @reviewed_by, @reviewed_at, @reviewed_at)
-    ON CONFLICT (bill_no) DO NOTHING`)
-  const auditStmt = db.prepare(`
-    INSERT INTO audit_events (id, entity_type, entity_id, action, before, after, reason, actor_id, actor_name, created_at)
-    VALUES (@id, @entity_type, @entity_id, @action, @before, @after, @reason, @actor_id, @actor_name, @created_at)
-    ON CONFLICT (id) DO NOTHING`)
-
-  db.transaction(() => {
+export async function seedFlagsAndCases(): Promise<void> {
+  await withTransaction(async () => {
     for (const f of SEEDED_FLAGS) {
-      flagStmt.run({ ...f, bus_code: f.bus_code, entry_ids: JSON.stringify(f.entry_ids), bill_nos: JSON.stringify(f.bill_nos), figures: JSON.stringify(f.figures) })
+      await sqlRun(
+        `INSERT INTO flags (id, rule_code, title, bus_code, severity, reason, plain_explanation,
+          evidence_summary, entry_ids, bill_nos, amount_at_issue, confidence, figures, status, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'needs_review', ?)
+        ON CONFLICT (id) DO NOTHING`,
+        [
+          f.id, f.rule_code, f.title, f.bus_code, f.severity, f.reason, f.plain_explanation,
+          f.evidence_summary, JSON.stringify(f.entry_ids), JSON.stringify(f.bill_nos),
+          f.amount_at_issue, f.confidence, JSON.stringify(f.figures), f.created_at,
+        ],
+      )
     }
-    for (const n of SEEDED_NOTES) noteStmt.run(n)
-    for (const a of SEEDED_APPROVALS) approvalStmt.run({ ...a, bus_code: a.bus_code })
-    for (const r of SEEDED_RECONCILIATION_REVIEW) reconStmt.run({ ...r })
-    SEEDED_AUDIT.forEach((a, i) =>
-      auditStmt.run({ id: i + 1, before: null, after: null, reason: null, ...a, actor_id: a.actor_id }),
-    )
+    for (const n of SEEDED_NOTES) {
+      await sqlRun(
+        `INSERT INTO flag_notes (id, flag_id, author_id, author_name, author_role, text, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT (id) DO NOTHING`,
+        [n.id, n.flag_id, n.author_id, n.author_name, n.author_role, n.text, n.created_at],
+      )
+    }
+    for (const a of SEEDED_APPROVALS) {
+      await sqlRun(
+        `INSERT INTO approvals (id, target_type, target_id, title, bus_code, amount, submitter_id,
+          submitter_name, submitter_role, evidence_summary, review_notes, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT (id) DO NOTHING`,
+        [
+          a.id, a.target_type, a.target_id, a.title, a.bus_code, a.amount, a.submitter_id,
+          a.submitter_name, a.submitter_role, a.evidence_summary, a.review_notes, a.created_at,
+        ],
+      )
+    }
+    for (const r of SEEDED_RECONCILIATION_REVIEW) {
+      await sqlRun(
+        `INSERT INTO reconciliation_results (bill_no, match_status, difference, reviewer_decision,
+          reviewer_note, reviewed_by, reviewed_at, reviewed_at_ts)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT (bill_no) DO NOTHING`,
+        [r.bill_no, r.match_status, r.difference, r.reviewer_decision, r.reviewer_note, r.reviewed_by, r.reviewed_at, r.reviewed_at],
+      )
+    }
+    for (let i = 0; i < SEEDED_AUDIT.length; i++) {
+      const a = SEEDED_AUDIT[i]
+      await sqlRun(
+        `INSERT INTO audit_events (id, entity_type, entity_id, action, before, after, reason, actor_id, actor_name, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT DO NOTHING`,
+        [i + 1, a.entity_type, a.entity_id, a.action, (a as { before?: string }).before ?? null, (a as { after?: string }).after ?? null, (a as { reason?: string }).reason ?? null, a.actor_id, a.actor_name, a.created_at],
+      )
+    }
 
     // Entries referenced by seeded cases are marked needs_review.
     const entryIds = SEEDED_FLAGS.flatMap((f) => f.entry_ids)
-    db.prepare(
+    await sqlRun(
       `UPDATE fuel_entries SET status = 'needs_review'
        WHERE status = 'saved' AND id IN (${entryIds.map(() => '?').join(',')})`,
-    ).run(...entryIds)
-  })()
+      entryIds,
+    )
+  })
+
+  // PostgreSQL: explicit seed ids do not advance the serial sequence — fix it.
+  if (dialect === 'postgres') {
+    await sqlRun(
+      `SELECT setval(pg_get_serial_sequence('audit_events','id'), GREATEST((SELECT COALESCE(MAX(id), 1) FROM audit_events), 1))`,
+    )
+  }
 }
 
 export interface ImportReport {
@@ -556,21 +556,27 @@ export interface ImportReport {
   places: number
 }
 
-export function runImport(): ImportReport {
-  migrate()
-  importBuses()
-  seedUsers()
-  importReference()
+const count = async (table: string): Promise<number> => {
+  const r = await sqlGet<{ n: number }>(`SELECT COUNT(*) AS n FROM ${table}`)
+  return Number(r?.n ?? 0)
+}
+
+export async function runImport(): Promise<ImportReport> {
+  await connectDb()
+  await migrate()
+  await importBuses()
+  await seedUsers()
+  await importReference()
   const report: ImportReport = {
-    buses: importBuses(),
-    registerEntries: importRegister(),
-    statementLines: importStatement().lines,
-    gpsPings: importGpsPings(),
-    prices: (db.prepare('SELECT COUNT(*) AS n FROM diesel_prices').get() as { n: number }).n,
-    holidays: (db.prepare('SELECT COUNT(*) AS n FROM college_calendar').get() as { n: number }).n,
-    places: (db.prepare('SELECT COUNT(*) AS n FROM places').get() as { n: number }).n,
+    buses: await importBuses(),
+    registerEntries: await importRegister(),
+    statementLines: (await importStatement()).lines,
+    gpsPings: await importGpsPings(),
+    prices: await count('diesel_prices'),
+    holidays: await count('college_calendar'),
+    places: await count('places'),
   }
-  seedFlagsAndCases()
+  await seedFlagsAndCases()
   return report
 }
 
@@ -578,16 +584,23 @@ const invokedDirectly =
   process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href
 
 if (invokedDirectly) {
-  const report = runImport()
-  const counts = {
-    users: (db.prepare('SELECT COUNT(*) AS n FROM users').get() as { n: number }).n,
-    buses: (db.prepare('SELECT COUNT(*) AS n FROM buses').get() as { n: number }).n,
-    entries: (db.prepare('SELECT COUNT(*) AS n FROM fuel_entries').get() as { n: number }).n,
-    statementLines: (db.prepare('SELECT COUNT(*) AS n FROM pump_statement_lines').get() as { n: number }).n,
-    gpsPings: (db.prepare('SELECT COUNT(*) AS n FROM gps_pings').get() as { n: number }).n,
-    flags: (db.prepare('SELECT COUNT(*) AS n FROM flags').get() as { n: number }).n,
-    approvals: (db.prepare('SELECT COUNT(*) AS n FROM approvals').get() as { n: number }).n,
-  }
-  console.log('[import] new rows this run:', report)
-  console.log('[import] totals in database:', counts)
+  runImport()
+    .then(async (report) => {
+      const counts = {
+        users: await count('users'),
+        buses: await count('buses'),
+        entries: await count('fuel_entries'),
+        statementLines: await count('pump_statement_lines'),
+        gpsPings: await count('gps_pings'),
+        flags: await count('flags'),
+        approvals: await count('approvals'),
+      }
+      console.log('[import] new rows this run:', report)
+      console.log('[import] totals in database:', counts)
+      process.exit(0)
+    })
+    .catch((e) => {
+      console.error('[import] failed:', e)
+      process.exit(1)
+    })
 }

@@ -1,5 +1,5 @@
 import type { Request } from 'express'
-import { db } from './db'
+import { sqlAll, sqlGet, sqlRun, withTransaction } from './db'
 import { normReg } from './csv'
 import { nowIso } from './time'
 import { reconcile, type ReconcileResult } from './reconcile'
@@ -11,21 +11,22 @@ export type AuditAction =
   | 'escalated' | 'approved' | 'rejected' | 'info_requested' | 'synced'
   | 'bus_lookup' | 'bus_changed' | 'reconciliation_reviewed' | 'statement_loaded'
 
-export function audit(
+export async function audit(
   entityType: 'entry' | 'flag' | 'approval' | 'bus' | 'reconciliation' | 'statement' | 'evidence',
   entityId: string,
   action: AuditAction,
   actor: { id: string | null; name: string },
   extra?: { before?: string; after?: string; reason?: string },
-): void {
-  db.prepare(
+): Promise<void> {
+  await sqlRun(
     `INSERT INTO audit_events (entity_type, entity_id, action, before, after, reason, actor_id, actor_name, created_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-  ).run(entityType, entityId, action, extra?.before ?? null, extra?.after ?? null, extra?.reason ?? null, actor.id, actor.name, nowIso())
+    [entityType, entityId, action, extra?.before ?? null, extra?.after ?? null, extra?.reason ?? null, actor.id, actor.name, nowIso()],
+  )
 }
 
-export function nextFlagId(): string {
-  const rows = db.prepare("SELECT id FROM flags WHERE id LIKE 'FLG-%'").all() as { id: string }[]
+export async function nextFlagId(): Promise<string> {
+  const rows = await sqlAll<{ id: string }>("SELECT id FROM flags WHERE id LIKE 'FLG-%'")
   const max = rows.reduce((acc, r) => {
     const v = Number(r.id.replace('FLG-', ''))
     return Number.isFinite(v) ? Math.max(acc, v) : acc
@@ -33,8 +34,8 @@ export function nextFlagId(): string {
   return `FLG-${String(max + 1).padStart(2, '0')}`
 }
 
-export function nextEntryId(): string {
-  const rows = db.prepare("SELECT id FROM fuel_entries WHERE id LIKE 'E-%'").all() as { id: string }[]
+export async function nextEntryId(): Promise<string> {
+  const rows = await sqlAll<{ id: string }>("SELECT id FROM fuel_entries WHERE id LIKE 'E-%'")
   const max = rows.reduce((acc, r) => {
     const v = Number(r.id.replace('E-', ''))
     return Number.isFinite(v) ? Math.max(acc, v) : acc
@@ -50,11 +51,10 @@ export interface ReconciliationRow extends ReconcileResult {
 }
 
 /** Live computation over the database, with persisted reviewer state merged in. */
-export function computeReconciliation(): ReconciliationRow[] {
-  const lines = loadStatementLines()
-  const entries = (
-    db.prepare('SELECT id, bus_code, ts_client, litres, amount, payment_mode FROM fuel_entries').all() as Record<string, unknown>[]
-  ).map((e) => ({
+export async function computeReconciliation(): Promise<ReconciliationRow[]> {
+  const lines = await loadStatementLines()
+  const entryRows = await sqlAll<Record<string, unknown>>('SELECT id, bus_code, ts_client, litres, amount, payment_mode FROM fuel_entries')
+  const entries = entryRows.map((e) => ({
     id: String(e.id),
     busCode: String(e.bus_code),
     tsClient: String(e.ts_client),
@@ -63,59 +63,62 @@ export function computeReconciliation(): ReconciliationRow[] {
     paymentMode: String(e.payment_mode),
   }))
   const busByReg = new Map<string, string>()
-  for (const b of db.prepare('SELECT bus_code, reg_no FROM buses').all() as Record<string, unknown>[]) {
+  for (const b of await sqlAll<Record<string, unknown>>('SELECT bus_code, reg_no FROM buses')) {
     busByReg.set(normReg(String(b.reg_no)), String(b.bus_code))
   }
-  const prices = (db.prepare('SELECT date, price FROM diesel_prices ORDER BY date').all() as Record<string, unknown>[]).map((p) => ({
+  const prices = (await sqlAll<Record<string, unknown>>('SELECT date, price FROM diesel_prices ORDER BY date')).map((p) => ({
     date: String(p.date),
     price: Number(p.price),
   }))
 
   const computed = reconcile(lines, entries, busByReg, prices)
   const reviewerRows = new Map(
-    (db.prepare('SELECT * FROM reconciliation_results').all() as Record<string, unknown>[]).map((r) => [
+    (await sqlAll<Record<string, unknown>>('SELECT * FROM reconciliation_results')).map((r) => [
       String(r.bill_no),
       r,
     ]),
   )
 
   // Refresh the persisted computation snapshot (preserving reviewer fields).
-  const upsert = db.prepare(`
-    INSERT INTO reconciliation_results (bill_no, entry_ids, match_status, difference, entry_litres, entry_amount)
-    VALUES (?, ?, ?, ?, ?, ?)
-    ON CONFLICT (bill_no) DO UPDATE SET
-      entry_ids = excluded.entry_ids,
-      match_status = excluded.match_status,
-      difference = excluded.difference,
-      entry_litres = excluded.entry_litres,
-      entry_amount = excluded.entry_amount`)
-  db.transaction(() => {
+  await withTransaction(async () => {
     for (const c of computed) {
       const side = c.entrySide
-      upsert.run(
-        c.billNo,
-        JSON.stringify(c.entryIds),
-        c.matchStatus,
-        c.difference,
-        side?.litres ?? null,
-        side?.amount ?? null,
+      await sqlRun(
+        `INSERT INTO reconciliation_results (bill_no, entry_ids, match_status, difference, entry_litres, entry_amount)
+         VALUES (?, ?, ?, ?, ?, ?)
+         ON CONFLICT (bill_no) DO UPDATE SET
+           entry_ids = excluded.entry_ids,
+           match_status = excluded.match_status,
+           difference = excluded.difference,
+           entry_litres = excluded.entry_litres,
+           entry_amount = excluded.entry_amount`,
+        [
+          c.billNo,
+          JSON.stringify(c.entryIds),
+          c.matchStatus,
+          c.difference,
+          side?.litres ?? null,
+          side?.amount ?? null,
+        ],
       )
     }
-  })()
-
-  return computed.map((c) => {
-    const r = reviewerRows.get(c.billNo)
-    const reviewedBy = r?.reviewed_by
-      ? (db.prepare('SELECT name FROM users WHERE id = ?').get(String(r.reviewed_by)) as { name: string } | undefined)
-      : undefined
-    return {
-      ...c,
-      reviewerDecision: r ? String(r.reviewer_decision ?? 'none') : 'none',
-      reviewerNote: r && r.reviewer_note ? String(r.reviewer_note) : null,
-      reviewedByName: reviewedBy?.name ?? null,
-      reviewedAt: r && r.reviewed_at ? String(r.reviewed_at) : null,
-    }
   })
+
+  return Promise.all(
+    computed.map(async (c) => {
+      const r = reviewerRows.get(c.billNo)
+      const reviewedBy = r?.reviewed_by
+        ? await sqlGet<{ name: string }>('SELECT name FROM users WHERE id = ?', [String(r.reviewed_by)])
+        : undefined
+      return {
+        ...c,
+        reviewerDecision: r ? String(r.reviewer_decision ?? 'none') : 'none',
+        reviewerNote: r && r.reviewer_note ? String(r.reviewer_note) : null,
+        reviewedByName: reviewedBy?.name ?? null,
+        reviewedAt: r && r.reviewed_at ? String(r.reviewed_at) : null,
+      }
+    }),
+  )
 }
 
 /** Role-scoping helper for entry lists. */

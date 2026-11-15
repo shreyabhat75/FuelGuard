@@ -1,45 +1,49 @@
 import { Router } from 'express'
-import { db } from '../db'
+import { sqlAll, sqlGet } from '../db'
+import { ah } from '../asyncHandler'
 import { requireAuth, requireRole } from '../auth'
-import { serializeBus, serializeEntry } from '../serializers'
+import { serializeBus, serializeEntries } from '../serializers'
 import { haversineKm, isoIST } from '../time'
 import { audit } from '../helpers'
 
 export const busesRouter = Router()
 
 /** GET /api/buses — buses allowed for the current user (driver sees own bus only). */
-busesRouter.get('/buses', requireAuth, (req, res) => {
+busesRouter.get('/buses', requireAuth, ah(async (req, res) => {
   const user = req.user!
   const rows =
     user.role === 'driver'
-      ? (db.prepare('SELECT * FROM buses WHERE bus_code = ? ORDER BY bus_code').all(user.busCode) as Record<string, unknown>[])
-      : (db.prepare('SELECT * FROM buses ORDER BY bus_code').all() as Record<string, unknown>[])
+      ? ((await sqlAll<Record<string, unknown>>('SELECT * FROM buses WHERE bus_code = ? ORDER BY bus_code', [
+          user.busCode,
+        ])) as Record<string, unknown>[])
+      : ((await sqlAll<Record<string, unknown>>('SELECT * FROM buses ORDER BY bus_code')) as Record<string, unknown>[])
   res.json({ buses: rows.map(serializeBus) })
-})
+}))
 
-busesRouter.get('/buses/:code', requireAuth, (req, res) => {
+busesRouter.get('/buses/:code', requireAuth, ah(async (req, res) => {
   const user = req.user!
   if (user.role === 'driver' && user.busCode !== req.params.code) {
     res.status(403).json({ error: 'Not your bus' })
     return
   }
-  const row = db.prepare('SELECT * FROM buses WHERE bus_code = ?').get(req.params.code) as
+  const row = (await sqlGet<Record<string, unknown>>('SELECT * FROM buses WHERE bus_code = ?', [req.params.code])) as
     | Record<string, unknown>
     | undefined
   if (!row) {
     res.status(404).json({ error: 'Bus not found' })
     return
   }
-  const entries = db
-    .prepare(`SELECT e.*, u.name AS created_name FROM fuel_entries e LEFT JOIN users u ON u.id = e.created_by
-              WHERE e.bus_code = ? ORDER BY e.ts_client DESC LIMIT 100`)
-    .all(req.params.code) as Record<string, unknown>[]
-  res.json({ bus: serializeBus(row), entries: entries.map(serializeEntry) })
-})
+  const entries = (await sqlAll<Record<string, unknown>>(
+    `SELECT e.*, u.name AS created_name FROM fuel_entries e LEFT JOIN users u ON u.id = e.created_by
+     WHERE e.bus_code = ? ORDER BY e.ts_client DESC LIMIT 100`,
+    [req.params.code],
+  )) as Record<string, unknown>[]
+  res.json({ bus: serializeBus(row), entries: await serializeEntries(entries) })
+}))
 
 /** GET /api/buses/:code/qr — QR payload for the printable bus tag. */
-busesRouter.get('/buses/:code/qr', requireAuth, (req, res) => {
-  const row = db.prepare('SELECT * FROM buses WHERE bus_code = ?').get(req.params.code) as
+busesRouter.get('/buses/:code/qr', requireAuth, ah(async (req, res) => {
+  const row = (await sqlGet<Record<string, unknown>>('SELECT * FROM buses WHERE bus_code = ?', [req.params.code])) as
     | Record<string, unknown>
     | undefined
   if (!row) {
@@ -51,7 +55,7 @@ busesRouter.get('/buses/:code/qr', requireAuth, (req, res) => {
     regNo: row.reg_no,
     qrPayload: `vpc-fleetfuel:bus:${row.bus_code}`,
   })
-})
+}))
 
 /**
  * GET /api/buses/:code/path — GPS path summary for evidence.
@@ -61,7 +65,7 @@ busesRouter.get('/buses/:code/qr', requireAuth, (req, res) => {
  *     (from is exclusive, to inclusive; full "YYYY-MM-DD[ HH:MM[:SS]]" or bare date)
  * Missing GPS is reported as-is, never as fraud.
  */
-busesRouter.get('/buses/:code/path', requireAuth, requireRole('transport_manager', 'accountant'), (req, res) => {
+busesRouter.get('/buses/:code/path', requireAuth, requireRole('transport_manager', 'accountant'), ah(async (req, res) => {
   const q = req.query as Record<string, string | undefined>
   const TS = /^\d{4}-\d{2}-\d{2}([ T]\d{2}:\d{2}(:\d{2})?)?$/
   let from: string | undefined
@@ -87,9 +91,10 @@ busesRouter.get('/buses/:code/path', requireAuth, requireRole('transport_manager
   }
 
   const pings = (
-    db
-      .prepare('SELECT ts, lat, lng FROM gps_pings WHERE bus_code = ? AND ts > ? AND ts <= ? ORDER BY ts')
-      .all(req.params.code, from!, to!) as { ts: string; lat: number; lng: number }[]
+    (await sqlAll<{ ts: string; lat: number; lng: number }>(
+      'SELECT ts, lat, lng FROM gps_pings WHERE bus_code = ? AND ts > ? AND ts <= ? ORDER BY ts',
+      [req.params.code, from!, to!],
+    )) as { ts: string; lat: number; lng: number }[]
   ).map((p) => ({ timestamp: isoIST(p.ts), lat: p.lat, lng: p.lng }))
 
   let pathKm = 0
@@ -98,7 +103,7 @@ busesRouter.get('/buses/:code/path', requireAuth, requireRole('transport_manager
   }
   pathKm = Math.round(pathKm * 10) / 10
 
-  audit('bus', req.params.code, 'bus_lookup', { id: req.user!.id, name: req.user!.name }, { after: `${from} → ${to}` })
+  await audit('bus', req.params.code, 'bus_lookup', { id: req.user!.id, name: req.user!.name }, { after: `${from} → ${to}` })
   res.json({
     busCode: req.params.code,
     from,
@@ -112,4 +117,4 @@ busesRouter.get('/buses/:code/path', requireAuth, requireRole('transport_manager
         : undefined,
     pings,
   })
-})
+}))

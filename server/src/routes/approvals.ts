@@ -1,7 +1,8 @@
 import { Router } from 'express'
 import crypto from 'node:crypto'
 import { z } from 'zod'
-import { db } from '../db'
+import { sqlAll, sqlGet, sqlRun } from '../db'
+import { ah } from '../asyncHandler'
 import { requireAuth, requireRole } from '../auth'
 import { serializeApproval } from '../serializers'
 import { audit } from '../helpers'
@@ -10,17 +11,17 @@ import { nowIso } from '../time'
 export const approvalsRouter = Router()
 
 /** GET /api/approvals — principal/admin see all; others see their own submissions. */
-approvalsRouter.get('/approvals', requireAuth, (req, res) => {
+approvalsRouter.get('/approvals', requireAuth, ah(async (req, res) => {
   const user = req.user!
   const rows =
     user.role === 'principal' || user.role === 'admin'
-      ? (db.prepare('SELECT * FROM approvals ORDER BY created_at DESC').all() as Record<string, unknown>[])
-      : (db.prepare('SELECT * FROM approvals WHERE submitter_id = ? ORDER BY created_at DESC').all(user.id) as Record<string, unknown>[])
-  res.json({ approvals: rows.map(serializeApproval) })
-})
+      ? ((await sqlAll<Record<string, unknown>>('SELECT * FROM approvals ORDER BY created_at DESC')) as Record<string, unknown>[])
+      : ((await sqlAll<Record<string, unknown>>('SELECT * FROM approvals WHERE submitter_id = ? ORDER BY created_at DESC', [user.id])) as Record<string, unknown>[])
+  res.json({ approvals: await Promise.all(rows.map(serializeApproval)) })
+}))
 
 /** POST /api/approvals — escalate a flag or correction to the principal. */
-approvalsRouter.post('/approvals', requireAuth, requireRole('transport_manager'), (req, res) => {
+approvalsRouter.post('/approvals', requireAuth, requireRole('transport_manager'), ah(async (req, res) => {
   const user = req.user!
   const schema = z.object({
     flagId: z.string().optional(),
@@ -43,7 +44,7 @@ approvalsRouter.post('/approvals', requireAuth, requireRole('transport_manager')
   let evidenceSummary = ''
 
   if (parsed.data.flagId) {
-    const flag = db.prepare('SELECT * FROM flags WHERE id = ?').get(parsed.data.flagId) as
+    const flag = (await sqlGet<Record<string, unknown>>('SELECT * FROM flags WHERE id = ?', [parsed.data.flagId])) as
       | Record<string, unknown>
       | undefined
     if (!flag) {
@@ -59,7 +60,7 @@ approvalsRouter.post('/approvals', requireAuth, requireRole('transport_manager')
     amount = Number(flag.amount_at_issue ?? 0)
     evidenceSummary = String(flag.evidence_summary ?? '')
   } else {
-    const corr = db.prepare('SELECT * FROM corrections WHERE id = ?').get(parsed.data.correctionId!) as
+    const corr = (await sqlGet<Record<string, unknown>>('SELECT * FROM corrections WHERE id = ?', [parsed.data.correctionId!])) as
       | Record<string, unknown>
       | undefined
     if (!corr) {
@@ -71,40 +72,43 @@ approvalsRouter.post('/approvals', requireAuth, requireRole('transport_manager')
       return
     }
     title = `Correction of ${corr.field} on ${corr.entry_id}`
-    busCode = (db.prepare('SELECT bus_code FROM fuel_entries WHERE id = ?').get(String(corr.entry_id)) as { bus_code: string } | undefined)?.bus_code ?? null
+    busCode = ((await sqlGet<{ bus_code: string }>('SELECT bus_code FROM fuel_entries WHERE id = ?', [String(corr.entry_id)])) as { bus_code: string } | undefined)?.bus_code ?? null
     amount = Math.abs(Number(corr.proposed_value) - Number(corr.original_value))
     evidenceSummary = `Proposed change: ${corr.field} ${corr.original_value} → ${corr.proposed_value}. Reason: ${corr.reason}`
   }
 
   const id = `APR-${crypto.randomBytes(3).toString('hex').toUpperCase()}`
-  db.prepare(`
-    INSERT INTO approvals (id, target_type, target_id, title, bus_code, amount, submitter_id,
+  await sqlRun(
+    `INSERT INTO approvals (id, target_type, target_id, title, bus_code, amount, submitter_id,
       submitter_name, submitter_role, evidence_summary, review_notes, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
-    id,
-    parsed.data.flagId ? 'flag' : 'correction',
-    parsed.data.flagId ?? parsed.data.correctionId!,
-    title,
-    busCode,
-    amount,
-    user.id,
-    user.name,
-    user.role,
-    evidenceSummary,
-    parsed.data.reviewNotes,
-    nowIso(),
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      id,
+      parsed.data.flagId ? 'flag' : 'correction',
+      parsed.data.flagId ?? parsed.data.correctionId!,
+      title,
+      busCode,
+      amount,
+      user.id,
+      user.name,
+      user.role,
+      evidenceSummary,
+      parsed.data.reviewNotes,
+      nowIso(),
+    ],
   )
   if (parsed.data.flagId) {
-    db.prepare("UPDATE flags SET status = 'escalated' WHERE id = ? AND status NOT IN ('resolved','rejected')").run(parsed.data.flagId)
-    audit('flag', parsed.data.flagId, 'escalated', { id: user.id, name: user.name }, { after: `Escalated as ${id}` })
+    await sqlRun("UPDATE flags SET status = 'escalated' WHERE id = ? AND status NOT IN ('resolved','rejected')", [parsed.data.flagId])
+    await audit('flag', parsed.data.flagId, 'escalated', { id: user.id, name: user.name }, { after: `Escalated as ${id}` })
   }
-  audit('approval', id, 'created', { id: user.id, name: user.name })
-  res.status(201).json({ approval: serializeApproval(db.prepare('SELECT * FROM approvals WHERE id = ?').get(id) as Record<string, unknown>) })
-})
+  await audit('approval', id, 'created', { id: user.id, name: user.name })
+  const row = (await sqlGet<Record<string, unknown>>('SELECT * FROM approvals WHERE id = ?', [id])) as Record<string, unknown>
+  res.status(201).json({ approval: await serializeApproval(row) })
+}))
 
 /** POST /api/approvals/:id/decision — approve / reject / request info.
  *  Maker-checker enforced server-side: submitter cannot decide. */
-approvalsRouter.post('/approvals/:id/decision', requireAuth, requireRole('principal'), (req, res) => {
+approvalsRouter.post('/approvals/:id/decision', requireAuth, requireRole('principal'), ah(async (req, res) => {
   const user = req.user!
   const schema = z.object({
     decision: z.enum(['approved', 'rejected', 'info_requested']),
@@ -115,7 +119,7 @@ approvalsRouter.post('/approvals/:id/decision', requireAuth, requireRole('princi
     res.status(400).json({ error: 'decision + mandatory reason (5+ chars) required', details: parsed.error.flatten() })
     return
   }
-  const approval = db.prepare('SELECT * FROM approvals WHERE id = ?').get(req.params.id) as
+  const approval = (await sqlGet<Record<string, unknown>>('SELECT * FROM approvals WHERE id = ?', [req.params.id])) as
     | Record<string, unknown>
     | undefined
   if (!approval) {
@@ -133,50 +137,51 @@ approvalsRouter.post('/approvals/:id/decision', requireAuth, requireRole('princi
 
   const { decision, reason } = parsed.data
   const now = nowIso()
-  db.prepare('UPDATE approvals SET decision = ?, reason = ?, decided_by = ?, decided_at = ? WHERE id = ?').run(
+  await sqlRun('UPDATE approvals SET decision = ?, reason = ?, decided_by = ?, decided_at = ? WHERE id = ?', [
     decision, reason, user.id, now, req.params.id,
-  )
-  audit('approval', req.params.id, decision, { id: user.id, name: user.name }, { reason })
+  ])
+  await audit('approval', req.params.id, decision, { id: user.id, name: user.name }, { reason })
 
   const targetId = String(approval.target_id)
   if (String(approval.target_type) === 'flag') {
     const flagStatus = decision === 'approved' ? 'resolved' : decision === 'rejected' ? 'rejected' : 'awaiting_evidence'
     if (decision === 'info_requested') {
-      audit('flag', targetId, 'info_requested', { id: user.id, name: user.name }, { reason })
+      await audit('flag', targetId, 'info_requested', { id: user.id, name: user.name }, { reason })
     } else {
-      db.prepare('UPDATE flags SET status = ?, resolution_note = ?, resolved_by = ?, resolved_at = ? WHERE id = ?').run(
+      await sqlRun('UPDATE flags SET status = ?, resolution_note = ?, resolved_by = ?, resolved_at = ? WHERE id = ?', [
         flagStatus, reason, user.id, now, targetId,
-      )
-      audit('flag', targetId, 'status_changed', { id: user.id, name: user.name }, {
+      ])
+      await audit('flag', targetId, 'status_changed', { id: user.id, name: user.name }, {
         before: String(approval.title),
         after: flagStatus,
         reason,
       })
     }
   } else {
-    const corr = db.prepare('SELECT * FROM corrections WHERE id = ?').get(targetId) as
+    const corr = (await sqlGet<Record<string, unknown>>('SELECT * FROM corrections WHERE id = ?', [targetId])) as
       | Record<string, unknown>
       | undefined
     if (corr && decision !== 'info_requested') {
       const newStatus = decision === 'approved' ? 'approved' : 'rejected'
-      db.prepare('UPDATE corrections SET status = ?, decided_by = ?, decided_at = ? WHERE id = ?').run(
+      await sqlRun('UPDATE corrections SET status = ?, decided_by = ?, decided_at = ? WHERE id = ?', [
         newStatus, user.id, now, targetId,
-      )
+      ])
       if (decision === 'approved') {
         const column = String(corr.field) === 'odometerKm' ? 'odometer_km' : String(corr.field)
-        db.prepare(`UPDATE fuel_entries SET ${column} = ? WHERE id = ?`).run(
+        await sqlRun(`UPDATE fuel_entries SET ${column} = ? WHERE id = ?`, [
           Number(corr.proposed_value), String(corr.entry_id),
-        )
-        audit('entry', String(corr.entry_id), 'status_changed', { id: user.id, name: user.name }, {
+        ])
+        await audit('entry', String(corr.entry_id), 'status_changed', { id: user.id, name: user.name }, {
           before: `${corr.field} = ${corr.original_value}`,
           after: `${corr.field} = ${corr.proposed_value}`,
           reason: `Correction ${corr.id} approved: ${reason}`,
         })
       }
     } else if (corr) {
-      audit('entry', String(corr.entry_id), 'info_requested', { id: user.id, name: user.name }, { reason })
+      await audit('entry', String(corr.entry_id), 'info_requested', { id: user.id, name: user.name }, { reason })
     }
   }
 
-  res.json({ approval: serializeApproval(db.prepare('SELECT * FROM approvals WHERE id = ?').get(req.params.id) as Record<string, unknown>) })
-})
+  const row = (await sqlGet<Record<string, unknown>>('SELECT * FROM approvals WHERE id = ?', [req.params.id])) as Record<string, unknown>
+  res.json({ approval: await serializeApproval(row) })
+}))

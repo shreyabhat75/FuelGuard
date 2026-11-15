@@ -2,7 +2,8 @@
 
 **Fuel accountability for Vidyanagara PU College** — Part C MVP + Part D backend for the
 ArtIntele internship project. A mobile-first fuel-entry app for drivers, a desktop
-fleet-monitoring dashboard for the office, and a real backend (SQLite, JWT auth + RBAC,
+fleet-monitoring dashboard for the office, and a real backend (PostgreSQL primary with
+automatic SQLite fallback, JWT auth + RBAC,
 idempotent CSV import, detection engine, reconciliation) built on the synthetic Aug–Oct 2026
 diesel dataset (8 buses, 112 register fills, 82 pump statement lines, 54,522 GPS pings).
 
@@ -44,8 +45,9 @@ the backend, and open the frontend as usual. Login is then username-based: `driv
 demo/mock mode (in-memory, any password).
 
 The stack: React 18 + TypeScript + Vite 5 + Tailwind CSS 3 + React Router 6 + Lucide +
-Recharts + qrcode.react; backend: Node + Express + better-sqlite3 + JWT + bcrypt + Multer +
-Zod. The API contract, permission matrix and demo accounts are documented in
+Recharts + qrcode.react; backend: Node + Express + PostgreSQL (pg) with automatic SQLite
+(better-sqlite3) fallback + JWT + bcrypt + Multer + Zod. The API contract, permission matrix
+and demo accounts are documented in
 [`server/API.md`](server/API.md).
 
 ## 2. Demo roles
@@ -116,8 +118,9 @@ claims without receipts). Data and rule assumptions are listed in
 The backend lives in [`server/`](server/) and implements the plan in
 [`docs/Backend-APIs.md`](docs/Backend-APIs.md):
 
-- SQLite schema + migrations (users, buses, fuel_entries, GPS pings, evidence, pump statements,
-  flags, approvals, corrections, audit events, reconciliation, prices/calendar/places)
+- PostgreSQL schema + migrations (users, buses, fuel_entries, GPS pings, evidence, pump
+  statements, flags, approvals, corrections, audit events, reconciliation, prices/calendar/
+  places) — identical schema on SQLite when `DB_DRIVER=auto` falls back
 - Idempotent import of **all seven CSVs** (incl. 54,522 GPS pings; DD-MM-YYYY statement dates,
   IST register timestamps, registration normalisation) — re-running never duplicates
 - JWT login + role-based permissions enforced server-side, maker-checker on approvals, no hard

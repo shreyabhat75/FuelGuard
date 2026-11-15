@@ -13,6 +13,9 @@ const repoRoot = path.resolve(here, '..', '..')
 export const env = {
   port: Number(resolve('PORT', '4000')),
   jwtSecret: resolve('JWT_SECRET', 'dev-only-secret-change-me'),
+  /** Primary: PostgreSQL. DB_DRIVER=auto → fall back to SQLite when PG is unreachable. */
+  databaseUrl: resolve('DATABASE_URL', 'postgresql://postgres:Shreya@localhost:5433/FuelGuard'),
+  dbDriver: resolve('DB_DRIVER', 'auto') as 'auto' | 'postgres' | 'sqlite',
   dbPath: path.resolve(repoRoot, resolve('DB_PATH', 'server/data/fleetfuel.db')),
   uploadDir: path.resolve(repoRoot, resolve('UPLOAD_DIR', 'server/uploads')),
   dataDir: path.resolve(repoRoot, resolve('DATA_DIR', 'intern_pack/intern_pack')),

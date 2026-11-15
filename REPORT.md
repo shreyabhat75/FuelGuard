@@ -23,7 +23,8 @@ cash, and the only record was a paper register. This project replaces that paper
 2. **An office dashboard** for the transport manager, accountant and principal: KPIs, entries,
    flagged fills with evidence, pump-statement reconciliation, approvals, bus/QR management and
    an audit log.
-3. **A real backend** (Person 2 deliverable): SQLite database with migrations, idempotent import
+3. **A real backend** (Person 2 deliverable): PostgreSQL database (with automatic SQLite
+   fallback) with migrations, idempotent import
    of all seven supplied CSVs (including 54,522 GPS pings), JWT login with server-enforced
    role permissions, the detection engine, evidence storage, reconciliation, maker-checker
    approvals, append-only corrections/audit, and deployment configuration.
@@ -62,11 +63,13 @@ audit), the rule engine, the EN/ಕನ್ನಡ toggle and the demo dataset mapp
   request/response shapes with the frontend (the serializers emit exactly the Part C types) and
   the rule interface with the detection engine (`runEntryChecks` outputs: rule code, severity,
   reason, explanation, evidence, amount at issue).
-- **Database.** SQLite via better-sqlite3 (WAL) with a versioned migration system (currently v1)
-  and 16 tables: `users, buses, fuel_entries, evidence, gps_pings, pump_statement_files,
-  pump_statement_lines, flags, flag_notes, approvals, corrections, audit_events,
-  reconciliation_results, diesel_prices, college_calendar, places` — foreign keys, indexes and
-  timestamps throughout.
+- **Database.** PostgreSQL (pg driver) as the primary engine with a versioned migration system
+  (currently v1) and 16 tables: `users, buses, fuel_entries, evidence, gps_pings,
+  pump_statement_files, pump_statement_lines, flags, flag_notes, approvals, corrections,
+  audit_events, reconciliation_results, diesel_prices, college_calendar, places` — foreign keys,
+  indexes and timestamps throughout. A single dialect-aware schema applies unchanged to SQLite
+  (better-sqlite3, WAL) so the server still boots offline when PostgreSQL is unreachable
+  (`DB_DRIVER=auto` fallback, verified).
 - **Idempotent CSV import.** One command imports **all seven** supplied CSVs (8 buses; 112
   register entries with IST timestamps normalised; 82 pump statement lines with DD-MM-YYYY dates
   normalised; 54,522 GPS pings; 92 diesel prices; 7 holidays; 3 places) keyed on natural unique
@@ -101,7 +104,7 @@ audit), the rule engine, the EN/ಕನ್ನಡ toggle and the demo dataset mapp
   one, the entry is updated and the audit trail records before/after. **Maker-checker is
   enforced in the database layer logic:** the submitter of an approval can never decide it
   (403), and a decided approval cannot be decided again (409).
-- **Deployment configuration.** Environment variables (`PORT, JWT_SECRET, DB_PATH, UPLOAD_DIR,
+- **Deployment configuration.** Environment variables (`PORT, JWT_SECRET, DATABASE_URL, DB_DRIVER, DB_PATH, UPLOAD_DIR,
   DATA_DIR, CORS_ORIGIN, TOKEN_TTL_HOURS`) with safe defaults, CORS allow-list, public health
   endpoint, automatic import + seed on boot, `.env.example`, and secrets kept out of git.
 - **Testing.** An end-to-end API smoke suite (`npm run smoke`, 53 checks, all passing) that boots
@@ -137,7 +140,93 @@ working login → bus list → create-entry endpoints before office screens were
 
 ---
 
-## 4. System architecture
+## 4. Technology stack & system architecture
+
+### 4.1 Technology stack
+
+**Frontend (`/` — one codebase, mobile + desktop layouts)**
+
+| Layer | Technology | Version | Used for |
+| --- | --- | --- | --- |
+| UI framework | React | 18.3.x | all driver + office screens |
+| Language | TypeScript (strict) | 5.5.x | shared types across UI, rules, API client |
+| Build tool | Vite | 5.4.x | dev server, production bundles (code-split charts/vendor chunks) |
+| Styling | Tailwind CSS | 3.4.x | utility styling, responsive mobile/desktop shells |
+| Routing | react-router-dom | 6.26.x | page navigation, role-guarded routes |
+| Charts | recharts | 2.12.x | dashboard trends, efficiency/price charts |
+| QR codes | qrcode.react | 4.0.x | printable windscreen QR tags |
+| Icons | lucide-react | 0.441.x | icon set |
+| Service layer | `src/services/` | — | `api.ts` (mock store) + `rest.ts` (real API), gated by `VITE_API_MODE` |
+
+**Backend (`server/`)**
+
+| Layer | Technology | Version | Used for |
+| --- | --- | --- | --- |
+| Runtime | Node.js | 22.x (ES2022 modules) | API server, import, tests |
+| Web framework | Express | 4.21.x | routers, middleware, multipart handling |
+| Language | TypeScript (strict) | 5.5.x | all server code |
+| Database | PostgreSQL (pg) primary · SQLite (better-sqlite3) fallback | 8.13.x / 11.10.x | relational DB, prepared statements, WAL on SQLite |
+| Auth | jsonwebtoken + bcryptjs | 9.0.x / 2.4.x | JWT (12 h) login, password hashing |
+| Uploads | multer | 2.5.x | multipart image/CSV ingestion with validation |
+| Validation | zod | 3.24.x | request-body schemas (notes, decisions, corrections) |
+| CORS | cors | 2.8.x | configurable origin allow-list |
+| Dev runner | tsx | 4.19.x | instant TS execution (`dev`, `import`, `smoke`) |
+| Bundler | esbuild | 0.24.x | production bundle → single `dist/server.cjs` |
+
+**Data, tooling & deployment**
+
+| Item | Choice |
+| --- | --- |
+| Database | PostgreSQL at `localhost:5433` (`DATABASE_URL`); SQLite file fallback (`server/data/fleetfuel.db`, gitignored) |
+| Migrations | versioned in-code (pg `_migrations` table / SQLite `user_version` pragma), applied automatically on boot |
+| Source data | 7 supplied CSVs → idempotent import on first boot |
+| Tests | API smoke suite (53 checks) + frontend engine smoke (24 checks), both plain scripts |
+| Version control | Git / GitHub (`main` + `backend` branches) |
+| Config | `.env` via `.env.example` (`PORT, JWT_SECRET, DATABASE_URL, DB_DRIVER, DB_PATH, UPLOAD_DIR, DATA_DIR, CORS_ORIGIN, TOKEN_TTL_HOURS`) |
+| Deployment target | any Node host (env-configured `PORT`/`CORS_ORIGIN`/`TOKEN_TTL_HOURS`; production bundle via `npm start`); frontend static build |
+
+### 4.2 Why these choices
+
+- **PostgreSQL primary, SQLite fallback** — PG matches the "real deployment" expectation of the
+  brief (network-accessible relational DB, concurrent office users); the dialect-aware schema
+  keeps a zero-install SQLite mode for demos without PostgreSQL. `DB_DRIVER=auto` tries
+  PostgreSQL first and falls back with a logged warning.
+- **pg + better-sqlite3 behind one async adapter** — `sqlAll/sqlGet/sqlRun/sqlExec` translate
+  `?` placeholders and results per dialect; import of 54,522 GPS pings completes in seconds in
+  batched inserts inside one transaction (batched `INSERT ... ON CONFLICT DO NOTHING`).
+- **Express 4 over heavier frameworks** — the RBAC/audit seams stay explicit middleware that is
+  easy to demonstrate and defend.
+- **No ORM** — hand-written SQL with prepared statements keeps every permission-scoping query
+  (`WHERE bus_code = ?` for drivers) visible and auditable.
+- **Vite + one React codebase** — the driver phone UI and office desktop UI share components,
+  types and the rule engine; two build targets from one source.
+- **JWT stateless auth** — no server session store; the token carries the role, and every
+  endpoint re-checks permissions server-side.
+
+### 4.3 Repository layout
+
+```
+FuelGuard/
+├── src/                     React app (driver + office)
+│   ├── pages/               Part C screens (login, wizard, dashboard, flags, …)
+│   ├── services/            api.ts (mock) · rest.ts (real API)  ← the seam
+│   ├── utils/rules.ts       detection engine (shared semantics with server)
+│   └── data/seed.ts         demo dataset mapped 1:1 from the CSVs
+├── server/                  Person 2 deliverable (Express + PostgreSQL/SQLite)
+│   ├── src/index.ts         app wiring: routers, CORS, evidence middleware
+│   ├── src/migrations.ts    schema v1 (16 tables) + seeds
+│   ├── src/import.ts        idempotent CSV import (7 files)
+│   ├── src/rules.ts         server-side rule engine (same codes/thresholds)
+│   ├── src/reconcile.ts     statement ↔ register matching engine
+│   ├── src/auth.ts          JWT + requireRole middleware
+│   └── src/routes/          entries · buses · flags · approvals · statements · misc
+├── docs/                    Backend-APIs.md · PartC-Mapping.md · Walkthrough.md
+├── server/API.md            implemented API contract + permission matrix
+├── REPORT.md                this report (Part E is the last page)
+└── server/.env.example       deployment configuration (PORT, CORS, DATABASE_URL, …)
+```
+
+### 4.4 Runtime architecture
 
 ```
 ┌───────────────────────────  Driver phone  ───────────────────────────┐
@@ -151,11 +240,12 @@ working login → bus list → create-entry endpoints before office screens were
 │  flags  approvals (maker-checker)  statements  reconciliation        │
 │  detection engine → flags (never blocks save)   audit (append-only)  │
 └──────────────┬───────────────────────────────────────────────────────┘
-               │ better-sqlite3 (WAL)
+               │ async DB adapter (pg 8.13 / better-sqlite3)
 ┌──────────────▼───────────────────────────────────────────────────────┐
-│  SQLite: 16 tables · migration v1                                    │
+│  PostgreSQL (primary): 16 tables · migration v1                      │
 │  users buses fuel_entries evidence gps_pings statements flags        │
 │  approvals corrections audit_events reconciliation prices calendar   │
+│  SQLite fallback when PG unreachable (same schema, same code)        │
 └──────────────────────────────────────────────────────────────────────┘
         ▲                                ▲
         │ private uploads/ (images)      │ intern_pack CSVs → idempotent import
@@ -165,6 +255,56 @@ The office React app (desktop layout) uses the same API. In **API mode** every s
 `GET /bootstrap` (one role-scoped snapshot) and every action POSTs to the API, then re-reads the
 snapshot — the server is the single source of truth. In **mock mode** the same UI runs on the
 in-memory store seeded from the CSVs, so the demo never depends on the network.
+
+### 4.5 Data model (16 tables, grouped)
+
+| Group | Tables | Notes |
+| --- | --- | --- |
+| People & fleet | `users`, `buses` | roles + permissions; bus identity, tank spec, driver name |
+| Core transactions | `fuel_entries` | full fill record, `status` CHECK, `client_ref UNIQUE` (offline dedupe), `source` (register/app) |
+| Evidence | `evidence`, `gps_pings` | image metadata + private file path; 54.5k pings (UNIQUE bus+ts) |
+| Pump statements | `pump_statement_files`, `pump_statement_lines` | import provenance + per-bill lines (upsert by bill no) |
+| Review workflow | `flags`, `flag_notes`, `approvals`, `corrections` | flags may name several buses; notes append-only; maker-checker rules |
+| Accountability | `audit_events` | append-only actor/action/entity/before-after |
+| Reference | `reconciliation_results`, `diesel_prices`, `college_calendar`, `places` | per-bill decisions, published prices, holidays, pump locations |
+
+### 4.6 API surface (all under `/api`)
+
+| Group | Endpoints |
+| --- | --- |
+| Auth | `POST /auth/login` · `POST /auth/logout` |
+| Snapshot | `GET /bootstrap` (role-scoped: everything a screen needs in one call) |
+| Fuel entries | `POST /fuel-entries` (multipart + rules) · `GET /fuel-entries` · `GET /fuel-entries/:id` · corrections (propose/decide) |
+| Evidence | `GET /evidence/:id/file` (token-authenticated; `?token=` supported for `<img>`) |
+| Buses | `GET /buses` · `GET /buses/:code` · QR payload · `GET /buses/:code/path` (GPS evidence) |
+| Flags | `GET /flags` · `GET /flags/:id` (first view audited) · notes · review (needs_review/under_review/resolved/rejected) · escalate |
+| Approvals | `GET /approvals` · `POST /approvals` · `POST /approvals/:id/decision` (maker-checker enforced) |
+| Statements | `POST /statements/import` · `GET /reconciliation` · `POST /reconciliation/decision` |
+| Office | `GET /dashboard` · `GET /audit` · `GET /reference` · `GET /health` |
+
+### 4.7 Security architecture
+
+- **Server-side RBAC everywhere** — `requireRole` middleware on every protected route; drivers
+  are scoped to their own bus inside the SQL queries, not the UI.
+- **Maker-checker at the data layer** — the escalation submitter cannot decide their own approval
+  (403); a decided approval is immutable (409 on re-decision).
+- **Private evidence** — images live in an unlisted folder; every byte leaves the server only
+  through an authenticated endpoint (JWT header or single-file `?token=`).
+- **Append-only integrity** — no DELETE endpoints; corrections preserve originals and require
+  principal approval; every state change writes an audit event.
+- **Secrets & config** — bcrypt hashing, 12 h expiring tokens, `JWT_SECRET` from env (never
+  committed), CORS allow-list, public surface limited to `/health` and `/auth/login`.
+
+### 4.8 Data flow
+
+- **Write path (driver save):** multipart POST → zod/file validation → server ID + timestamp →
+  transactional insert → rule engine → flags + audit → response with saved entry. A rule hit
+  never rolls back the entry (201 with `needs_review`).
+- **Offline replay:** drafts queue on the phone with a deterministic `clientRef`
+  (`app|bus|ts|odometer|litres`); on reconnect the client replays and the server answers with the
+  original entry — duplicates are impossible.
+- **Read path (office):** every screen hydrates from `GET /bootstrap`; mutations POST, then
+  re-fetch the snapshot, so UI state can never drift from the database.
 
 ---
 
@@ -268,7 +408,8 @@ are asserted by both the engine smoke test and the API smoke test.
 | Engine smoke (frontend rules + reconciliation) | `npm run smoke` | 24/24 checks; categories {matched 75, rate 3, amount 1, unmatched 1, register-missing 1, duplicate 1} |
 | **API smoke (backend end-to-end, fresh DB)** | `cd server && npm run smoke` | **53/53** — auth, scoping, entry+rules, idempotent replay, evidence privacy, RBAC denials, reconciliation, maker-checker, corrections, GPS path, audit |
 | Type-check + production build | `npx tsc -b && npm run build` (both apps) | clean |
-| Import idempotency | `npm run import` (twice) | totals unchanged (8/112/82/54,522) |
+| Import idempotency | `npm run import` (twice) | totals unchanged (8/112/82/54,522) — verified on PostgreSQL |
+| PostgreSQL switchover | server + full API verify on PG | 15/15 checks on live PG (auth, scoping, save+rules, evidence, replay-dedupe, reconciliation decision, maker-checker, GPS path, dashboard); SQLite fallback verified with dead `DATABASE_URL` |
 | Live integration | backend :4000 + frontend `VITE_API_MODE=rest` | login → bootstrap → save → retry-dedupe → evidence → office snapshot verified |
 
 ## 8. How to run
@@ -277,7 +418,8 @@ are asserted by both the engine smoke test and the API smoke test.
 # frontend (mock demo, no network needed)
 npm install && npm run dev            # http://localhost:5173
 
-# backend (real database + APIs)
+# backend (real database + APIs; PostgreSQL at localhost:5433 by default,
+#   automatic SQLite fallback when PG is unreachable)
 cd server && npm install && npm run dev   # http://localhost:4000/api
 
 # frontend against the backend: copy .env.example → .env.local, uncomment
@@ -293,7 +435,8 @@ cd server && npm install && npm run dev   # http://localhost:4000/api
 - Offline drafts queued for sync lose queued photo bytes if the page reloads first; the entry
   still syncs and the low-severity `ODOMETER_PHOTO_MISSING` flag records the gap honestly.
 - The efficiency chart is a derived estimate (odometer deltas ÷ litres), labelled as such.
-- Deployment to a public HTTPS URL (render/vercel + a hosted SQLite volume) is configured but the
+- Deployment to a public HTTPS URL (any Node host; PostgreSQL reachable from the host, or the
+  SQLite fallback for a single-instance demo) is configuration work, not code work; the
   live link is the remaining pre-deadline step, along with the ≤5-minute demo video.
 - The four quantified credit mismatches (₹10,902.22 total) remain **unresolved** — the system's
   job is to keep them visible with evidence until humans close them.

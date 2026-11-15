@@ -1,22 +1,27 @@
 /**
- * Versioned migrations. `user_version` pragma tracks the applied version.
- * Schema follows the team contract: users, buses, fuel_entries, evidence,
- * gps_pings, pump statements, flags, approvals, corrections, audit_events,
- * reconciliation_results. Foreign keys, indexes and timestamps throughout.
- * Corrections/audit/flags are append-only — no hard deletes anywhere.
+ * Versioned migrations. Applied version is tracked via the `user_version`
+ * pragma (SQLite) or the `_migrations` table (PostgreSQL). The schema is
+ * dialect-aware: identical shape on both engines. Foreign keys, indexes and
+ * timestamps throughout. Corrections/audit/flags are append-only — no hard
+ * deletes anywhere.
  */
+
+export type Dialect = 'postgres' | 'sqlite'
 
 export interface Migration {
   version: number
   name: string
-  sql: string
+  sql: (dialect: Dialect) => string
 }
+
+const AUTO_PK = (d: Dialect) => (d === 'sqlite' ? 'INTEGER PRIMARY KEY AUTOINCREMENT' : 'SERIAL PRIMARY KEY')
+const R = (d: Dialect) => (d === 'sqlite' ? 'REAL' : 'DOUBLE PRECISION')
 
 export const MIGRATIONS: Migration[] = [
   {
     version: 1,
     name: 'initial-schema',
-    sql: `
+    sql: (d: Dialect) => `
 CREATE TABLE buses (
   bus_code    TEXT PRIMARY KEY,
   reg_no      TEXT NOT NULL UNIQUE,
@@ -44,17 +49,17 @@ CREATE TABLE fuel_entries (
   bus_code         TEXT NOT NULL REFERENCES buses(bus_code),
   ts_client        TEXT NOT NULL,
   ts_server        TEXT NOT NULL,
-  litres           REAL NOT NULL CHECK (litres > 0),
-  amount           REAL NOT NULL CHECK (amount > 0),
+  litres           ${R(d)} NOT NULL CHECK (litres > 0),
+  amount           ${R(d)} NOT NULL CHECK (amount > 0),
   fuel_type        TEXT NOT NULL CHECK (fuel_type IN ('diesel','petrol','cng')),
   odometer_km      INTEGER NOT NULL,
   paid_by          TEXT,
   payment_mode     TEXT NOT NULL CHECK (payment_mode IN ('credit_account','cash','upi','card')),
   pump_name        TEXT NOT NULL,
   bill_no          TEXT,
-  location_lat     REAL,
-  location_lng     REAL,
-  location_accuracy REAL,
+  location_lat     ${R(d)},
+  location_lng     ${R(d)},
+  location_accuracy ${R(d)},
   location_note    TEXT,
   receipt_on_file  INTEGER,
   activity_notes   TEXT,
@@ -84,11 +89,11 @@ CREATE TABLE evidence (
 CREATE INDEX idx_evidence_entry ON evidence (entry_id);
 
 CREATE TABLE gps_pings (
-  id       INTEGER PRIMARY KEY AUTOINCREMENT,
+  id       ${AUTO_PK(d)},
   bus_code TEXT NOT NULL REFERENCES buses(bus_code),
   ts       TEXT NOT NULL,
-  lat      REAL NOT NULL,
-  lng      REAL NOT NULL,
+  lat      ${R(d)} NOT NULL,
+  lng      ${R(d)} NOT NULL,
   UNIQUE (bus_code, ts)
 );
 CREATE INDEX idx_pings_bus_ts ON gps_pings (bus_code, ts);
@@ -106,9 +111,9 @@ CREATE TABLE pump_statement_lines (
   file_id   TEXT REFERENCES pump_statement_files(id),
   date      TEXT NOT NULL,
   vehicle_no TEXT NOT NULL,
-  litres    REAL NOT NULL,
-  rate      REAL NOT NULL,
-  amount    REAL NOT NULL
+  litres    ${R(d)} NOT NULL,
+  rate      ${R(d)} NOT NULL,
+  amount    ${R(d)} NOT NULL
 );
 CREATE INDEX idx_lines_vehicle_date ON pump_statement_lines (vehicle_no, date);
 
@@ -123,7 +128,7 @@ CREATE TABLE flags (
   evidence_summary  TEXT NOT NULL,
   entry_ids         TEXT NOT NULL DEFAULT '[]',
   bill_nos          TEXT NOT NULL DEFAULT '[]',
-  amount_at_issue   REAL NOT NULL DEFAULT 0,
+  amount_at_issue   ${R(d)} NOT NULL DEFAULT 0,
   confidence        TEXT NOT NULL,
   figures           TEXT NOT NULL DEFAULT '[]',
   status            TEXT NOT NULL DEFAULT 'needs_review'
@@ -153,7 +158,7 @@ CREATE TABLE approvals (
   target_id       TEXT NOT NULL,
   title           TEXT NOT NULL,
   bus_code        TEXT,
-  amount          REAL NOT NULL DEFAULT 0,
+  amount          ${R(d)} NOT NULL DEFAULT 0,
   submitter_id    TEXT NOT NULL REFERENCES users(id),
   submitter_name  TEXT NOT NULL,
   submitter_role  TEXT NOT NULL,
@@ -183,7 +188,7 @@ CREATE TABLE corrections (
 CREATE INDEX idx_corrections_entry ON corrections (entry_id);
 
 CREATE TABLE audit_events (
-  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  id          ${AUTO_PK(d)},
   entity_type TEXT NOT NULL CHECK (entity_type IN ('entry','flag','approval','bus','reconciliation','statement','evidence')),
   entity_id   TEXT NOT NULL,
   action      TEXT NOT NULL,
@@ -202,9 +207,9 @@ CREATE TABLE reconciliation_results (
   entry_ids         TEXT NOT NULL DEFAULT '[]',
   match_status      TEXT NOT NULL CHECK (match_status IN
     ('matched','amount_mismatch','rate_mismatch','unmatched_pump_bill','register_missing','possible_duplicate')),
-  difference        REAL NOT NULL DEFAULT 0,
-  entry_litres      REAL,
-  entry_amount      REAL,
+  difference        ${R(d)} NOT NULL DEFAULT 0,
+  entry_litres      ${R(d)},
+  entry_amount      ${R(d)},
   reviewer_decision TEXT NOT NULL DEFAULT 'none' CHECK (reviewer_decision IN
     ('none','resolved','needs_supplier_clarification','authorised_exception')),
   reviewer_note     TEXT,
@@ -215,7 +220,7 @@ CREATE TABLE reconciliation_results (
 
 CREATE TABLE diesel_prices (
   date  TEXT PRIMARY KEY,
-  price REAL NOT NULL
+  price ${R(d)} NOT NULL
 );
 
 CREATE TABLE college_calendar (
@@ -225,8 +230,8 @@ CREATE TABLE college_calendar (
 
 CREATE TABLE places (
   place TEXT PRIMARY KEY,
-  lat   REAL NOT NULL,
-  lng   REAL NOT NULL
+  lat   ${R(d)} NOT NULL,
+  lng   ${R(d)} NOT NULL
 );
 `,
   },

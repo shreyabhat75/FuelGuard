@@ -86,7 +86,13 @@ Framing rule enforced in data: flags carry `reason` + `plain_explanation`; no fi
 
 ## Data foundation
 
-- SQLite via better-sqlite3 (file: `server/data/fleetfuel.db`, WAL). Migration v1 = full schema: `users, buses, fuel_entries, evidence, gps_pings, pump_statement_files, pump_statement_lines, flags, flag_notes, approvals, corrections, audit_events, reconciliation_results, diesel_prices, college_calendar, places`.
+- **Primary: PostgreSQL** (`DATABASE_URL`, default `postgresql://postgres:***@localhost:5433/FuelGuard`).
+  `DB_DRIVER=auto` (default) tries PostgreSQL first and **falls back to SQLite** (`server/data/fleetfuel.db`,
+  via better-sqlite3, WAL) only if PostgreSQL is unreachable at boot; `DB_DRIVER=postgres` forces
+  PostgreSQL with no fallback, `DB_DRIVER=sqlite` forces SQLite (smoke tests use it). Identical
+  schema on both engines — migration v1: `users, buses, fuel_entries, evidence, gps_pings,
+  pump_statement_files, pump_statement_lines, flags, flag_notes, approvals, corrections,
+  audit_events, reconciliation_results, diesel_prices, college_calendar, places`.
 - `npm run import` (also runs automatically at boot): idempotent import of all seven CSVs — 8 buses, 112 register entries, 82 statement lines, 54,522 GPS pings, prices/calendar/places — plus seed of users, the 9 investigation cases from findings, 3 seeded approvals (submitted by the manager), reviewer decisions and audit history. Re-running never duplicates.
 - Evidence files live in `server/uploads/` (private) and are served only through `GET /evidence/:id/file` with a valid token.
 

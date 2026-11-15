@@ -72,6 +72,7 @@ async function main() {
       ...process.env,
       PORT: String(PORT),
       JWT_SECRET: 'smoke-test-secret',
+      DB_DRIVER: 'sqlite',
       DB_PATH: 'server/data/smoke.db',
       UPLOAD_DIR: 'server/uploads-smoke',
       CORS_ORIGIN: '*',

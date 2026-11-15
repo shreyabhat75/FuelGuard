@@ -1,10 +1,11 @@
 import jwt from 'jsonwebtoken'
 import bcrypt from 'bcryptjs'
-import type { NextFunction, Request, Response } from 'express'
+import type { NextFunction, Request, RequestHandler, Response } from 'express'
 import type { JwtPayload } from 'jsonwebtoken'
-import { db } from './db'
+import { sqlGet, sqlRun } from './db'
 import { env } from './env'
 import { nowIso } from './time'
+import { ah } from './asyncHandler'
 
 export interface AuthUser {
   id: string
@@ -29,17 +30,23 @@ function signToken(user: AuthUser): string {
   })
 }
 
-export function loginHandler(req: Request, res: Response): void {
+export const loginHandler = ah(async (req: Request, res: Response): Promise<void> => {
   const { username, password } = (req.body ?? {}) as { username?: string; password?: string }
   if (!username || !password) {
     res.status(400).json({ error: 'username and password are required' })
     return
   }
-  const row = db
-    .prepare('SELECT id, username, name, role, bus_code, password_hash, active FROM users WHERE username = ?')
-    .get(String(username)) as
-    | { id: string; username: string; name: string; role: AuthUser['role']; bus_code: string | null; password_hash: string; active: number }
-    | undefined
+  const row = await sqlGet<{
+    id: string
+    username: string
+    name: string
+    role: AuthUser['role']
+    bus_code: string | null
+    password_hash: string
+    active: number
+  }>('SELECT id, username, name, role, bus_code, password_hash, active FROM users WHERE username = ?', [
+    String(username),
+  ])
 
   if (!row || !bcrypt.compareSync(String(password), row.password_hash)) {
     res.status(401).json({ error: 'Invalid username or password' })
@@ -50,13 +57,14 @@ export function loginHandler(req: Request, res: Response): void {
     return
   }
   const user: AuthUser = { id: row.id, username: row.username, name: row.name, role: row.role, busCode: row.bus_code }
-  db.prepare(
+  await sqlRun(
     "INSERT INTO audit_events (entity_type, entity_id, action, actor_id, actor_name, created_at) VALUES ('entry','login','viewed',?,?,?)",
-  ).run(user.id, user.name, nowIso())
+    [user.id, user.name, nowIso()],
+  )
   res.json({ token: signToken(user), user })
-}
+})
 
-export function requireAuth(req: Request, res: Response, next: NextFunction): void {
+const requireAuthInner = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   const header = req.headers.authorization ?? ''
   const token = header.startsWith('Bearer ') ? header.slice(7) : undefined
   if (!token) {
@@ -65,9 +73,14 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
   }
   try {
     const payload = jwt.verify(token, env.jwtSecret) as JwtPayload
-    const row = db.prepare('SELECT id, username, name, role, bus_code, active FROM users WHERE id = ?').get(payload.sub) as
-      | { id: string; username: string; name: string; role: AuthUser['role']; bus_code: string | null; active: number }
-      | undefined
+    const row = await sqlGet<{
+      id: string
+      username: string
+      name: string
+      role: AuthUser['role']
+      bus_code: string | null
+      active: number
+    }>('SELECT id, username, name, role, bus_code, active FROM users WHERE id = ?', [payload.sub as string])
     if (!row || !row.active) {
       res.status(401).json({ error: 'Account no longer active' })
       return
@@ -79,10 +92,14 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
   }
 }
 
+export const requireAuth: RequestHandler = (req, res, next) => {
+  requireAuthInner(req, res, next).catch(next)
+}
+
 const OFFICE = ['transport_manager', 'accountant', 'principal', 'admin'] as const
 
 /** Role gate. Admin passes every office gate. */
-export function requireRole(...allowed: readonly (typeof OFFICE[number] | 'driver')[]) {
+export function requireRole(...allowed: readonly (typeof OFFICE[number] | 'driver')[]): RequestHandler {
   return (req: Request, res: Response, next: NextFunction): void => {
     const user = req.user
     if (!user) {

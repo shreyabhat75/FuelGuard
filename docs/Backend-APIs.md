@@ -1,7 +1,8 @@
 # Backend APIs / data still needed for Part D
 
 > **Status (Part D, Person 2): implemented.** The backend lives in `server/` (Express +
-> SQLite). The authoritative, implemented contract — endpoints, permission matrix, demo
+> PostgreSQL primary with automatic SQLite fallback). The authoritative, implemented contract —
+> endpoints, permission matrix, demo
 > accounts and status vocabulary — is [`server/API.md`](../server/API.md). This document is
 > kept as the original design seam list.
 
