@@ -1,0 +1,9 @@
+bus_code,reg_no,tank_litres,fuel_type,seats,driver_name,gps_device
+VB-01,KA 99 VB 1001,180,diesel,60,Manjunath K,GT06-01
+VB-02,KA 99 VB 1002,160,diesel,51,Prakash R,GT06-02
+VB-03,KA 99 VB 1003,200,diesel,40,Siddappa H,GT06-03
+VB-04,KA 99 VB 1004,160,diesel,51,Raghavendra S,GT06-04
+VB-05,KA 99 VB 1005,180,diesel,51,Basavaraj M,GT06-05
+VB-06,KA 99 VB 1006,160,diesel,60,Naveen T,GT06-06
+VB-07,KA 99 VB 1007,200,diesel,60,Hanumanthappa G,GT06-07
+VB-08,KA 99 VB 1008,180,diesel,60,Shivakumar B,GT06-08

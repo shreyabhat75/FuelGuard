@@ -1,0 +1,301 @@
+import { useMemo, useState } from 'react'
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import {
+  Bus as BusIcon,
+  ClipboardCheck,
+  Fuel,
+  Gauge,
+  LogOut,
+  Menu,
+  NotebookPen,
+  Receipt,
+  ScrollText,
+  X,
+} from 'lucide-react'
+import { currentUser, logout, setLang } from '../services/api'
+import { useAppState, users } from '../services/store'
+import { useI18n } from '../i18n'
+import { Chip, Modal } from './ui'
+import type { Role } from '../types'
+
+const roleLabel: Record<Role, string> = {
+  driver: 'Driver',
+  transport_manager: 'Transport Manager',
+  accountant: 'Accountant',
+  principal: 'Principal / Approver',
+}
+
+export function RoleBadge() {
+  const s = useAppState()
+  const user = currentUser(s)
+  if (!user) return null
+  return (
+    <span className="hidden items-center gap-2 sm:flex">
+      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-navy-800 text-xs font-bold text-white">
+        {user.name.split(' ').map((w) => w[0]).slice(0, 2).join('')}
+      </span>
+      <span className="text-left leading-tight">
+        <span className="block text-xs font-semibold text-navy-900">{user.name}</span>
+        <span className="block text-[11px] text-slate-500">{roleLabel[user.role]} · demo</span>
+      </span>
+    </span>
+  )
+}
+
+export function LangToggle() {
+  const s = useAppState()
+  return (
+    <div className="flex rounded-lg border border-slate-300 bg-white p-0.5 text-xs font-semibold" role="group" aria-label="Language">
+      {(['en', 'kn'] as const).map((l) => (
+        <button
+          key={l}
+          onClick={() => setLang(l)}
+          className={`rounded-md px-2 py-1 ${s.lang === l ? 'bg-primary-600 text-white' : 'text-slate-500 hover:bg-slate-100'}`}
+        >
+          {l === 'en' ? 'EN' : 'ಕನ್ನಡ'}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+const navForRole: Record<Role, { to: string; label: string; icon: React.ReactNode }[]> = {
+  driver: [],
+  transport_manager: [
+    { to: '/app', label: 'Dashboard', icon: <Gauge size={18} /> },
+    { to: '/app/entries', label: 'Fuel entries', icon: <Fuel size={18} /> },
+    { to: '/app/flagged', label: 'Flagged fills', icon: <NotebookPen size={18} /> },
+    { to: '/app/reconciliation', label: 'Pump statement', icon: <Receipt size={18} /> },
+    { to: '/app/buses', label: 'Buses & QR', icon: <BusIcon size={18} /> },
+    { to: '/app/audit', label: 'Audit log', icon: <ScrollText size={18} /> },
+  ],
+  accountant: [
+    { to: '/app', label: 'Dashboard', icon: <Gauge size={18} /> },
+    { to: '/app/reconciliation', label: 'Pump statement', icon: <Receipt size={18} /> },
+    { to: '/app/entries', label: 'Fuel entries', icon: <Fuel size={18} /> },
+    { to: '/app/flagged', label: 'Flagged fills', icon: <NotebookPen size={18} /> },
+    { to: '/app/audit', label: 'Audit log', icon: <ScrollText size={18} /> },
+  ],
+  principal: [
+    { to: '/app', label: 'Dashboard', icon: <Gauge size={18} /> },
+    { to: '/app/approvals', label: 'Approval inbox', icon: <ClipboardCheck size={18} /> },
+    { to: '/app/flagged', label: 'Flagged fills', icon: <NotebookPen size={18} /> },
+    { to: '/app/entries', label: 'Fuel entries', icon: <Fuel size={18} /> },
+    { to: '/app/audit', label: 'Audit log', icon: <ScrollText size={18} /> },
+  ],
+}
+
+function SwitchRoleModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const nav = useNavigate()
+  return (
+    <Modal open={open} onClose={onClose} title="Log out / switch demo role">
+      <p className="text-sm text-slate-600">
+        This prototype uses mock accounts. Logging out returns you to the demo sign-in screen where
+        you can pick another role. In production, switching roles requires re-authentication and
+        backend permission checks.
+      </p>
+      <button
+        onClick={() => {
+          logout()
+          nav('/login')
+        }}
+        className="mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-primary-600 font-semibold text-white hover:bg-primary-700"
+      >
+        <LogOut size={16} /> Log out & choose role
+      </button>
+    </Modal>
+  )
+}
+
+export function OfficeLayout() {
+  const s = useAppState()
+  const user = currentUser(s)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [switchOpen, setSwitchOpen] = useState(false)
+  const { pathname } = useLocation()
+  const items = user ? navForRole[user.role] : []
+  const pending = s.approvals.filter((a) => a.decision === 'pending').length
+  const flags = s.flags.filter((f) => f.status === 'needs_review').length
+  const title = useMemo(() => {
+    if (pathname === '/app') return 'Fleet dashboard'
+    if (pathname.startsWith('/app/entries')) return 'Fuel entries'
+    if (pathname.startsWith('/app/flagged')) return 'Flagged fills'
+    if (pathname.startsWith('/app/reconciliation')) return 'Pump statement reconciliation'
+    if (pathname.startsWith('/app/approvals')) return 'Approval inbox'
+    if (pathname.startsWith('/app/buses')) return 'Buses & QR'
+    if (pathname.startsWith('/app/audit')) return 'Audit log'
+    return 'Office'
+  }, [pathname])
+
+  const NavList = (
+    <nav className="flex flex-col gap-1" aria-label="Main">
+      {items.map((it) => (
+        <NavLink
+          key={it.to}
+          to={it.to}
+          end={it.to === '/app'}
+          onClick={() => setMenuOpen(false)}
+          className={({ isActive }) =>
+            `flex items-center justify-between gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium ${
+              isActive ? 'bg-primary-600 text-white' : 'text-slate-300 hover:bg-navy-800 hover:text-white'
+            }`
+          }
+        >
+          <span className="flex items-center gap-2.5">
+            {it.icon}
+            {it.label}
+          </span>
+          {it.label === 'Flagged fills' && flags > 0 && (
+            <span className="rounded-full bg-amber-400 px-1.5 text-[11px] font-bold text-navy-900">{flags}</span>
+          )}
+          {it.label === 'Approval inbox' && pending > 0 && (
+            <span className="rounded-full bg-primary-300 px-1.5 text-[11px] font-bold text-navy-900">{pending}</span>
+          )}
+        </NavLink>
+      ))}
+    </nav>
+  )
+
+  return (
+    <div className="flex min-h-screen">
+      {/* sidebar */}
+      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col bg-navy-900 p-4 lg:flex">
+        <Brand dark />
+        <div className="mt-6 flex-1">{NavList}</div>
+        <button
+          onClick={() => setSwitchOpen(true)}
+          className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-400 hover:bg-navy-800 hover:text-white"
+        >
+          <LogOut size={16} /> Log out / switch role
+        </button>
+        <p className="mt-2 px-3 text-[11px] text-slate-500">Prototype guard only — production must enforce permissions on the backend.</p>
+      </aside>
+
+      {/* mobile drawer */}
+      {menuOpen && (
+        <div className="fixed inset-0 z-40 lg:hidden" role="dialog" aria-modal="true">
+          <div className="absolute inset-0 bg-navy-950/60" onClick={() => setMenuOpen(false)} />
+          <div className="absolute inset-y-0 left-0 w-72 bg-navy-900 p-4 shadow-pop">
+            <div className="flex items-center justify-between">
+              <Brand dark />
+              <button onClick={() => setMenuOpen(false)} aria-label="Close menu" className="rounded-lg p-2 text-slate-400 hover:bg-navy-800">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="mt-6">{NavList}</div>
+            <button
+              onClick={() => {
+                setMenuOpen(false)
+                setSwitchOpen(true)
+              }}
+              className="mt-4 flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-400 hover:bg-navy-800 hover:text-white"
+            >
+              <LogOut size={16} /> Log out / switch role
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* main column */}
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur sm:px-6">
+          <button className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 lg:hidden" onClick={() => setMenuOpen(true)} aria-label="Open menu">
+            <Menu size={20} />
+          </button>
+          <h1 className="min-w-0 flex-1 truncate text-lg font-bold text-navy-900">{title}</h1>
+          <LangToggle />
+          <RoleBadge />
+        </header>
+        <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-5 sm:px-6 sm:py-6">
+          <Outlet context={{ user }} />
+        </main>
+        <footer className="border-t border-slate-200 px-4 py-3 text-center text-[11px] text-slate-400 sm:px-6">
+          FleetFuel Guard MVP · synthetic demo data (ArtIntele) · flags are review prompts, not proven findings
+        </footer>
+      </div>
+      <SwitchRoleModal open={switchOpen} onClose={() => setSwitchOpen(false)} />
+    </div>
+  )
+}
+
+export function Brand({ dark = false }: { dark?: boolean }) {
+  return (
+    <div className="flex items-center gap-2.5">
+      <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-600 text-white">
+        <Fuel size={18} />
+      </span>
+      <span className="leading-tight">
+        <span className={`block text-sm font-bold ${dark ? 'text-white' : 'text-navy-900'}`}>FleetFuel Guard</span>
+        <span className={`block text-[11px] ${dark ? 'text-slate-400' : 'text-slate-500'}`}>Vidyanagara PU College</span>
+      </span>
+    </div>
+  )
+}
+
+/** Driver mobile shell with bottom navigation. */
+export function DriverLayout({ children }: { children: React.ReactNode }) {
+  const s = useAppState()
+  const user = currentUser(s)
+  const { t } = useI18n()
+  const [switchOpen, setSwitchOpen] = useState(false)
+  const tabs = [
+    { to: '/driver', label: t('dashboard'), icon: <Gauge size={20} /> },
+    { to: '/driver/entries', label: t('myEntries'), icon: <Fuel size={20} /> },
+  ]
+  return (
+    <div className="mx-auto flex min-h-screen min-h-dvh max-w-md flex-col bg-slate-50 sm:my-0">
+      <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-slate-200 bg-white px-4 py-3">
+        <Brand />
+        <div className="ml-auto flex items-center gap-2">
+          <LangToggle />
+        </div>
+      </header>
+      <main className="flex-1 pb-24">{children}</main>
+      <nav className="fixed inset-x-0 bottom-0 z-30 mx-auto flex max-w-md items-stretch justify-around border-t border-slate-200 bg-white px-2 pb-[env(safe-area-inset-bottom)] pt-1" aria-label="Driver navigation">
+        {tabs.map((tb) => (
+          <NavLink
+            key={tb.to}
+            to={tb.to}
+            end={tb.to === '/driver'}
+            className={({ isActive }) =>
+              `flex min-w-[44%] flex-col items-center gap-0.5 rounded-lg py-2 text-xs font-medium ${isActive ? 'text-primary-700' : 'text-slate-500'}`
+            }
+          >
+            {tb.icon}
+            {tb.label}
+          </NavLink>
+        ))}
+        <button
+          onClick={() => setSwitchOpen(true)}
+          className="flex min-w-[44%] flex-col items-center gap-0.5 rounded-lg py-2 text-xs font-medium text-slate-500"
+        >
+          <LogOut size={20} />
+          {t('switchRole')}
+        </button>
+      </nav>
+      <SwitchRoleModal open={switchOpen} onClose={() => setSwitchOpen(false)} />
+      {user && <span className="sr-only">Signed in as {user.name}</span>}
+    </div>
+  )
+}
+
+export function usePillCounts() {
+  const s = useAppState()
+  return {
+    pendingApprovals: s.approvals.filter((a) => a.decision === 'pending').length,
+    openFlags: s.flags.filter((f) => f.status === 'needs_review' || f.status === 'escalated').length,
+    demoUsers: users,
+  }
+}
+
+export function ChipRow({ items }: { items: { tone: Parameters<typeof Chip>[0]['tone']; label: string }[] }) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {items.map((i) => (
+        <Chip key={i.label} tone={i.tone}>
+          {i.label}
+        </Chip>
+      ))}
+    </div>
+  )
+}

@@ -1,0 +1,113 @@
+entry_id,timestamp,bus_code,litres,amount_rs,fuel_type,odometer_km,paid_by,payment_mode,pump_name,written_by,receipt_on_file
+F0001,2026-08-04 10:22,VB-07,131.3,11701.46,diesel,41906,Hanumanthappa G,cash,Highway Fuel Point,Hanumanthappa,Y
+F0002,2026-08-04 10:23,VB-08,112.0,9981.44,diesel,41992,Shivakumar B,cash,Highway Fuel Point,Shivakumar,N
+F0008,2026-08-05 09:51,VB-06,107.5,9580.40,diesel,54631,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0005,2026-08-05 09:52,VB-03,149.5,13323.44,diesel,60051,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0003,2026-08-05 10:00,VB-01,135.4,12066.85,diesel,66304,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0007,2026-08-05 10:00,VB-05,131.7,11737.10,diesel,59293,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0004,2026-08-05 10:02,VB-02,107.7,9598.22,diesel,57348,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0006,2026-08-05 10:02,VB-04,119.4,10640.93,diesel,67431,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0009,2026-08-08 10:28,VB-07,123.1,10970.67,diesel,42405,Hanumanthappa G,cash,Highway Fuel Point,Hanumanthappa,Y
+F0010,2026-08-10 10:22,VB-08,143.5,12788.72,diesel,42550,Shivakumar B,cash,Highway Fuel Point,Shivakumar,Y
+F0013,2026-08-11 09:59,VB-05,120.8,10765.70,diesel,59784,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0011,2026-08-11 10:00,VB-01,113.9,10150.77,diesel,66811,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0012,2026-08-11 10:04,VB-03,136.9,12200.53,diesel,60598,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0014,2026-08-12 09:51,VB-04,119.2,10623.10,diesel,67960,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0015,2026-08-13 09:56,VB-02,114.9,10239.89,diesel,57883,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0016,2026-08-13 09:56,VB-06,110.1,9812.11,diesel,55133,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0017,2026-08-13 10:19,VB-07,134.7,12004.46,diesel,42904,Hanumanthappa G,cash,Highway Fuel Point,Hanumanthappa,Y
+F0018,2026-08-17 10:13,VB-08,130.2,11603.42,diesel,43107,Shivakumar B,cash,Highway Fuel Point,Shivakumar,Y
+F0020,2026-08-18 09:57,VB-03,134.1,11950.99,diesel,61146,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0019,2026-08-18 10:03,VB-01,118.3,10542.90,diesel,67319,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0021,2026-08-19 09:59,VB-05,135.5,12075.76,diesel,60372,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0022,2026-08-20 09:48,VB-04,121.1,10792.43,diesel,68489,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0023,2026-08-20 10:14,VB-07,153.3,13662.10,diesel,43521,Hanumanthappa G,cash,Highway Fuel Point,Hanumanthappa,Y
+F0024,2026-08-21 09:58,VB-02,103.7,9241.74,diesel,58342,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0025,2026-08-22 09:57,VB-06,109.3,9757.21,diesel,55636,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0026,2026-08-22 10:13,VB-08,139.6,12462.09,diesel,43664,Shivakumar B,cash,Highway Fuel Point,Shivakumar,Y
+F0028,2026-08-24 09:49,VB-03,140.0,12497.80,diesel,61693,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0027,2026-08-24 10:02,VB-01,123.9,11060.55,diesel,67827,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0029,2026-08-25 09:52,VB-05,120.1,10721.33,diesel,60863,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0030,2026-08-26 10:27,VB-07,157.7,14077.88,diesel,44138,Hanumanthappa G,cash,Highway Fuel Point,Hanumanthappa,Y
+F0031,2026-08-28 09:53,VB-04,118.6,10587.42,diesel,69018,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0032,2026-08-29 10:20,VB-08,135.1,12060.38,diesel,44222,Shivakumar B,cash,Highway Fuel Point,Shivakumar,Y
+F0033,2026-08-31 09:49,VB-01,120.1,10721.33,diesel,68335,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0035,2026-08-31 09:58,VB-03,139.4,12444.24,diesel,62241,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0034,2026-08-31 10:02,VB-02,112.9,10078.58,diesel,58877,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0036,2026-09-01 09:51,VB-06,104.2,9301.93,diesel,56138,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0037,2026-09-02 09:53,VB-05,135.0,12051.45,diesel,61451,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0038,2026-09-02 10:14,VB-07,147.5,13167.32,diesel,44754,Hanumanthappa G,cash,Highway Fuel Point,Hanumanthappa,Y
+F0039,2026-09-04 10:01,VB-04,120.5,10757.03,diesel,69547,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0040,2026-09-04 10:22,VB-08,136.1,12149.65,diesel,44779,Shivakumar B,cash,Highway Fuel Point,Shivakumar,Y
+F0041,2026-09-05 09:48,VB-03,131.9,12302.31,diesel,62788,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0043,2026-09-07 09:51,VB-02,101.4,9051.98,diesel,59336,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0042,2026-09-07 09:58,VB-01,135.0,12051.45,diesel,68943,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0044,2026-09-07 10:20,VB-07,128.0,11426.56,diesel,45254,Hanumanthappa G,cash,Highway Fuel Point,Hanumanthappa,N
+F0045,2026-09-08 10:03,VB-05,120.5,10757.03,diesel,61942,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0046,2026-09-09 09:48,VB-06,114.5,10221.41,diesel,56614,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0047,2026-09-10 10:32,VB-08,132.5,11828.27,diesel,45337,Shivakumar B,cash,Highway Fuel Point,Shivakumar,Y
+F0048,2026-09-11 09:54,VB-03,130.8,12199.72,diesel,63336,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0049,2026-09-11 09:55,VB-04,119.0,10623.13,diesel,70076,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),N
+F0050,2026-09-11 10:28,VB-07,129.2,11533.68,diesel,45753,Hanumanthappa G,cash,Highway Fuel Point,Hanumanthappa,Y
+F0051,2026-09-12 09:50,VB-01,122.1,10899.87,diesel,69451,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0052,2026-09-16 09:55,VB-02,100.6,10251.69,diesel,59795,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0053,2026-09-17 10:00,VB-05,137.1,12267.71,diesel,62530,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0054,2026-09-18 10:18,VB-07,129.6,11596.61,diesel,46252,Hanumanthappa G,cash,Highway Fuel Point,Hanumanthappa,Y
+F0055,2026-09-18 10:29,VB-08,137.4,12294.55,diesel,45894,Shivakumar B,cash,Highway Fuel Point,Shivakumar,Y
+F0057,2026-09-19 09:53,VB-06,107.8,9645.94,diesel,57143,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0056,2026-09-19 09:59,VB-03,141.3,13208.72,diesel,63883,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0058,2026-09-21 09:54,VB-01,136.9,12249.81,diesel,70022,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0059,2026-09-21 10:06,VB-04,118.5,10603.38,diesel,70605,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),N
+F0110,2026-09-21 10:12,VB-07,52.0,4652.96,diesel,46473,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0060,2026-09-23 09:54,VB-05,119.4,10683.91,diesel,63021,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),N
+F0061,2026-09-24 09:49,VB-02,119.7,10710.76,diesel,60330,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0063,2026-09-24 10:25,VB-08,133.8,11972.42,diesel,46452,Shivakumar B,cash,Highway Fuel Point,Shivakumar,Y
+F0062,2026-09-24 10:28,VB-07,153.8,13762.02,diesel,46869,Hanumanthappa G,cash,Highway Fuel Point,Hanumanthappa,Y
+F0064,2026-09-25 10:01,VB-01,120.2,10755.50,diesel,70570,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0065,2026-09-25 10:02,VB-03,139.4,12473.51,diesel,64431,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0067,2026-09-28 09:51,VB-06,112.3,10048.60,diesel,57646,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0066,2026-09-28 09:52,VB-04,116.4,10415.47,diesel,71134,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0068,2026-09-30 09:53,VB-01,132.9,11891.89,diesel,71104,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0069,2026-09-30 09:54,VB-05,134.9,12070.85,diesel,63609,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0071,2026-09-30 10:17,VB-08,135.1,12088.75,diesel,47009,Shivakumar B,cash,Highway Fuel Point,Shivakumar,Y
+F0070,2026-09-30 10:25,VB-07,156.9,14039.41,diesel,47486,Hanumanthappa G,cash,Highway Fuel Point,Hanumanthappa,Y
+F0072,2026-10-01 10:05,VB-03,135.0,12079.80,diesel,64978,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0111,2026-10-02 11:05,VB-08,60.0,5368.80,diesel,47106,Shivakumar B,cash,Highway Fuel Point,Shivakumar,N
+F0073,2026-10-03 10:00,VB-02,115.9,10370.73,diesel,60865,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0074,2026-10-05 09:58,VB-04,107.4,9610.15,diesel,71576,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0075,2026-10-06 09:54,VB-01,123.2,11023.94,diesel,71644,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0076,2026-10-06 10:00,VB-05,129.4,11578.71,diesel,64002,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0077,2026-10-06 10:26,VB-07,129.4,11578.71,diesel,47985,Hanumanthappa G,cash,Highway Fuel Point,Hanumanthappa,Y
+F0078,2026-10-07 09:57,VB-06,195.2,17466.50,diesel,58148,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0079,2026-10-07 10:15,VB-08,136.1,12178.23,diesel,47567,Shivakumar B,cash,Highway Fuel Point,Shivakumar,Y
+F0080,2026-10-08 10:00,VB-03,125.9,11265.53,diesel,65526,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0082,2026-10-10 09:47,VB-05,134.3,11994.33,diesel,64395,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0081,2026-10-10 09:59,VB-01,123.5,11029.78,diesel,72194,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0083,2026-10-12 09:51,VB-02,114.3,10208.13,diesel,61400,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0084,2026-10-12 09:56,VB-04,117.5,10493.93,diesel,72105,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0085,2026-10-12 10:27,VB-07,153.8,13735.88,diesel,48602,Hanumanthappa G,cash,Highway Fuel Point,Hanumanthappa,Y
+F0109,2026-10-12 17:56,VB-02,34.0,3036.54,diesel,61441,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0086,2026-10-13 10:18,VB-08,131.0,11699.61,diesel,48124,Shivakumar B,cash,Highway Fuel Point,Shivakumar,Y
+F0087,2026-10-14 09:52,VB-03,139.3,12440.88,diesel,66073,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0089,2026-10-15 09:57,VB-05,131.7,11762.13,diesel,64789,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0088,2026-10-15 10:02,VB-01,125.9,11244.13,diesel,72736,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0090,2026-10-15 10:05,VB-06,101.8,9091.76,diesel,58651,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0091,2026-10-16 10:26,VB-07,127.9,11422.75,diesel,49101,Hanumanthappa G,cash,Highway Fuel Point,Hanumanthappa,Y
+F0093,2026-10-19 10:00,VB-04,113.8,10163.48,diesel,72634,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0092,2026-10-19 10:02,VB-02,99.8,8913.14,diesel,61859,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0094,2026-10-19 10:27,VB-08,137.4,12271.19,diesel,48681,Shivakumar B,cash,Highway Fuel Point,Shivakumar,Y
+F0112,2026-10-19 10:47,VB-04,113.8,10163.48,diesel,72634,College account,credit_account,Shree Lakshmi Fuels,Raghavendra,Y
+F0097,2026-10-22 09:48,VB-05,138.2,12342.64,diesel,65182,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0095,2026-10-22 09:53,VB-01,132.1,11797.85,diesel,73268,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0096,2026-10-22 10:04,VB-03,134.0,11967.54,diesel,66621,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0098,2026-10-23 10:27,VB-07,133.1,11887.16,diesel,49601,Hanumanthappa G,cash,Highway Fuel Point,Hanumanthappa,N
+F0099,2026-10-26 09:57,VB-06,116.0,10359.96,diesel,59153,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0102,2026-10-27 09:50,VB-05,140.7,12565.92,diesel,65575,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0101,2026-10-27 09:51,VB-04,104.8,9359.69,diesel,73075,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0100,2026-10-27 09:52,VB-01,123.2,11002.99,diesel,73795,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0103,2026-10-27 10:18,VB-08,128.7,11494.20,diesel,49239,Shivakumar B,cash,Highway Fuel Point,Shivakumar,Y
+F0105,2026-10-28 09:54,VB-03,140.0,12503.40,diesel,67168,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),N
+F0104,2026-10-28 09:56,VB-02,102.1,9118.55,diesel,62318,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0106,2026-10-29 10:25,VB-07,156.8,14003.81,diesel,50217,Hanumanthappa G,cash,Highway Fuel Point,Hanumanthappa,Y
+F0107,2026-10-31 09:48,VB-01,114.5,10226.00,diesel,74326,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
+F0108,2026-10-31 09:57,VB-05,136.4,12181.88,diesel,65968,College account,credit_account,Shree Lakshmi Fuels,Ravi (transport manager),Y
