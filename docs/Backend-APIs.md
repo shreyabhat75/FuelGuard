@@ -1,7 +1,14 @@
 # Backend APIs / data still needed for Part D
 
+> **Status (Part D, Person 2): implemented.** The backend lives in `server/` (Express +
+> SQLite). The authoritative, implemented contract — endpoints, permission matrix, demo
+> accounts and status vocabulary — is [`server/API.md`](../server/API.md). This document is
+> kept as the original design seam list.
+
 The frontend service layer (`src/services/api.ts`) is the seam: each exported function below maps
 to a future endpoint. Nothing in the UI would need rewriting beyond the service module.
+(In API mode — `VITE_API_MODE=rest` — the frontend now calls the real endpoints through
+`src/services/rest.ts` and the UI code is unchanged.)
 
 ## Auth & users
 - `POST /auth/login`, `POST /auth/logout` — real authentication (mock today: role selector).

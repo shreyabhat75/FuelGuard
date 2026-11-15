@@ -2,3 +2,11 @@ node_modules/
 dist/
 *.local
 .DS_Store
+
+# backend (Person 2)
+server/node_modules/
+server/data/
+server/uploads/
+server/uploads-*/
+server/dist/
+server/.env

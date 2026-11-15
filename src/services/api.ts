@@ -17,6 +17,8 @@ import { store, type AppState, users } from './store'
 import { runEntryChecks, reconcile } from '../utils/rules'
 import { buses, dailyPrices, holidays } from './store'
 import { dateKey } from '../utils/format'
+import * as rest from './rest'
+import { API_MODE } from './rest'
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
@@ -59,6 +61,7 @@ function addAudit(
 /* ------------------------------- auth ------------------------------- */
 
 export async function login(userId: string) {
+  if (API_MODE) return rest.login(userId)
   await wait(450)
   store.set((s) => ({ ...addAudit(s, {
     entityType: 'entry',
@@ -69,6 +72,10 @@ export async function login(userId: string) {
 }
 
 export function logout() {
+  if (API_MODE) {
+    rest.logout()
+    return
+  }
   store.set((s) => ({ ...s, currentUserId: null }))
 }
 
@@ -111,6 +118,7 @@ export async function saveFuelEntry(
   entry: Omit<FuelEntry, 'id' | 'timestampServer' | 'status'>,
   opts: { offline: boolean },
 ): Promise<SaveResult> {
+  if (API_MODE && !opts.offline) return rest.saveFuelEntry(entry)
   await wait(700)
   const hits = runEntryChecks({ ...entry, id: 'NEW', status: 'saved' } as FuelEntry, {
     buses,
@@ -147,6 +155,7 @@ export async function saveFuelEntry(
 }
 
 export async function syncPendingEntries(): Promise<number> {
+  if (API_MODE) return rest.syncPendingEntries()
   await wait(1200)
   const s = store.get()
   const pending = s.entries.filter((e) => e.status === 'pending_sync')
@@ -182,6 +191,12 @@ export function setFlagStatus(
   reason: string,
   escalateTo?: Role,
 ) {
+  if (API_MODE) {
+    const serverStatus =
+      escalateTo === 'principal' ? 'escalated' : status === 'needs_review' ? null : status
+    if (serverStatus) void rest.setFlagStatus(flagId, serverStatus, reason).catch(() => undefined)
+    return
+  }
   store.set((s) => {
     const flag = s.flags.find((f) => f.id === flagId)
     if (!flag) return s
@@ -230,6 +245,10 @@ export function setFlagStatus(
 }
 
 export function addFlagNote(flagId: string, text: string) {
+  if (API_MODE) {
+    void rest.addFlagNote(flagId, text).catch(() => undefined)
+    return
+  }
   store.set((s) => {
     const actor = actorOf(s)
     const note: FlagNote = {
@@ -251,6 +270,10 @@ export function addFlagNote(flagId: string, text: string) {
 }
 
 export function markFlagViewed(flagId: string) {
+  if (API_MODE) {
+    rest.markFlagViewed(flagId)
+    return
+  }
   store.set((s) => addAudit(s, { entityType: 'flag', entityId: flagId, action: 'viewed' }))
 }
 
@@ -263,6 +286,10 @@ export function proposeCorrection(
   proposedValue: number,
   reason: string,
 ) {
+  if (API_MODE) {
+    void rest.proposeCorrection(entryId, field, proposedValue, reason).catch(() => undefined)
+    return
+  }
   store.set((s) => {
     const actor = actorOf(s)
     const c: CorrectionProposal = {
@@ -296,6 +323,10 @@ export function decideApproval(
   decision: Exclude<ApprovalDecision, 'pending'>,
   reason: string,
 ) {
+  if (API_MODE) {
+    void rest.decideApproval(approvalId, decision, reason).catch(() => undefined)
+    return
+  }
   store.set((s) => {
     const ap = s.approvals.find((a) => a.id === approvalId)
     if (!ap) return s
@@ -331,6 +362,10 @@ export function decideApproval(
 }
 
 export function createApprovalForFlag(flagId: string, note: string, submitter: User) {
+  if (API_MODE) {
+    void rest.createApprovalForFlag(flagId, note).catch(() => undefined)
+    return
+  }
   store.set((s) => {
     const flag = s.flags.find((f) => f.id === flagId)
     if (!flag) return s
@@ -361,6 +396,7 @@ export function createApprovalForFlag(flagId: string, note: string, submitter: U
 /* --------------------------- reconciliation --------------------------- */
 
 export async function loadDemoStatement() {
+  if (API_MODE) return rest.loadDemoStatement()
   await wait(900)
   store.set((s) => {
     const recs: ReconciliationResult[] = reconcile(s.entries, s.statementLines, buses, dailyPrices)
@@ -381,6 +417,16 @@ export function reviewReconciliation(
   decision: ReviewerDecision,
   note: string,
 ) {
+  if (API_MODE && decision !== 'none') {
+    void rest
+      .reviewReconciliation(
+        recId,
+        decision as 'resolved' | 'needs_supplier_clarification' | 'authorised_exception',
+        note,
+      )
+      .catch(() => undefined)
+    return
+  }
   store.set((s) => {
     const rec = s.reconciliations.find((r) => r.id === recId)
     if (!rec) return s

@@ -1,9 +1,10 @@
 # FleetFuel Guard
 
-**Fuel accountability for Vidyanagara PU College** — Part C MVP for the ArtIntele internship
-project. A mobile-first fuel-entry app for drivers and a desktop fleet-monitoring dashboard for
-the office, built on the synthetic Aug–Oct 2026 diesel dataset (8 buses, 112 register fills,
-82 pump statement lines).
+**Fuel accountability for Vidyanagara PU College** — Part C MVP + Part D backend for the
+ArtIntele internship project. A mobile-first fuel-entry app for drivers, a desktop
+fleet-monitoring dashboard for the office, and a real backend (SQLite, JWT auth + RBAC,
+idempotent CSV import, detection engine, reconciliation) built on the synthetic Aug–Oct 2026
+diesel dataset (8 buses, 112 register fills, 82 pump statement lines, 54,522 GPS pings).
 
 > **Important framing:** the app surfaces *discrepancies* with independent evidence and asks a
 > human to review them. It never labels a transaction "fraud confirmed". Suspicious items are
@@ -16,7 +17,7 @@ the office, built on the synthetic Aug–Oct 2026 diesel dataset (8 buses, 112 r
 
 ```bash
 npm install
-npm run dev        # http://localhost:5173
+npm run dev        # frontend on http://localhost:5173 (demo/mock mode)
 ```
 
 Other scripts:
@@ -26,14 +27,31 @@ npm run build      # type-check + production build to dist/
 npm run preview    # serve the production build locally
 ```
 
-Requires Node 18+. The project is React 18 + TypeScript + Vite 5 + Tailwind CSS 3 +
-React Router 6 + Lucide icons + Recharts + qrcode.react. All data is mock: a small typed service
-layer (`src/services/`) sits between the UI and an in-memory store seeded from the real CSVs, so
-the mock layer can later be swapped for API calls without rewriting components.
+### Backend (Person 2 — real database + APIs)
+
+```bash
+cd server
+npm install
+npm run dev        # boots on http://localhost:4000 — imports all 7 CSVs, seeds demo data
+npm run smoke      # 53 end-to-end API checks on a throwaway database
+npm run import     # re-run the idempotent CSV import manually
+```
+
+To run the **frontend against the real backend** (persistent records, server-side
+permissions), copy `.env.example` to `.env.local`, uncomment the two `VITE_API_*` lines, start
+the backend, and open the frontend as usual. Login is then username-based: `driver`, `manager`,
+`accountant`, `principal` or `admin`, password `demo123`. Without that env file the app stays in
+demo/mock mode (in-memory, any password).
+
+The stack: React 18 + TypeScript + Vite 5 + Tailwind CSS 3 + React Router 6 + Lucide +
+Recharts + qrcode.react; backend: Node + Express + better-sqlite3 + JWT + bcrypt + Multer +
+Zod. The API contract, permission matrix and demo accounts are documented in
+[`server/API.md`](server/API.md).
 
 ## 2. Demo roles
 
-Use the role selector on the sign-in screen (mock authentication — any password works):
+Mock mode uses the role selector on the sign-in screen (any password works). **API mode** uses
+the same four demo profiles plus `admin`, authenticated by the backend with JWT:
 
 | Role | Who | Sees |
 |---|---|---|
@@ -42,10 +60,12 @@ Use the role selector on the sign-in screen (mock authentication — any passwor
 | Accountant | Lakshmi Devi | Dashboard, pump statement reconciliation, entries, flags, audit log |
 | Principal / Approver | Dr. Suresh Rao | Dashboard, approval inbox, flags, entries, audit log |
 
-Log out / switch role is available in the driver bottom bar and the office sidebar. **The role
-guard is a frontend prototype guard only** — in production every permission (who may approve,
-resolve, reconcile, correct) must be re-checked on the backend; this app demonstrates the
-intended UX, not real security.
+Log out / switch role is available in the driver bottom bar and the office sidebar.
+
+**Permissions:** in mock mode the role guard is a frontend prototype guard only. In API mode
+every permission (who may create entries, review flags, import statements, decide approvals) is
+enforced server-side — see the matrix in [`server/API.md`](server/API.md) — and the maker of an
+approval can never decide it.
 
 ## 3. What is implemented (Part C mapping)
 
@@ -77,17 +97,35 @@ claims without receipts). Data and rule assumptions are listed in
 
 ## 5. Known limitations
 
-- Everything is client-side mock state; refreshing the page resets the demo.
-- "Uploads", QR scanning, server timestamps and sync are **simulated and labelled as demo** —
-  nothing pretends to be a real camera, GPS lock or server round-trip.
+- **Mock mode:** everything is client-side state; refreshing resets the demo. Run API mode for
+  persistence.
+- "Uploads", QR scanning and sync are **simulated and labelled as demo** in mock mode; in API
+  mode uploads are real files stored outside the public web root and served only through an
+  authenticated endpoint.
 - GPS coordinates are stored only if the browser actually provides them; otherwise the entry is
   marked "Location unavailable". No coordinates are ever invented.
 - The printed QR encodes only `vpc-fleetfuel:bus:VB-xx` (stable bus ID, no personal data).
 - Driver-facing text has an English/Kannada toggle; office screens are English-only.
 - The efficiency chart is a **derived estimate** (odometer deltas ÷ litres) and is labelled as
   such — it is not a verified mileage figure.
+- Drafts queued offline lose their queued photo bytes if the page is reloaded before sync; the
+  entry syncs and the low-severity `ODOMETER_PHOTO_MISSING` flag records the gap.
 
-## 6. What Part D still needs
+## 6. Part D — backend (Person 2, delivered)
 
-See [`docs/Backend-APIs.md`](docs/Backend-APIs.md) for the API/data list (auth, entries,
-statement upload + reconciliation, evidence storage, approvals, audit, GPS ingestion, etc.).
+The backend lives in [`server/`](server/) and implements the plan in
+[`docs/Backend-APIs.md`](docs/Backend-APIs.md):
+
+- SQLite schema + migrations (users, buses, fuel_entries, GPS pings, evidence, pump statements,
+  flags, approvals, corrections, audit events, reconciliation, prices/calendar/places)
+- Idempotent import of **all seven CSVs** (incl. 54,522 GPS pings; DD-MM-YYYY statement dates,
+  IST register timestamps, registration normalisation) — re-running never duplicates
+- JWT login + role-based permissions enforced server-side, maker-checker on approvals, no hard
+  deletes anywhere
+- Fuel-entry API with server timestamps, offline-sync idempotency (`clientRef`) and the
+  detection engine (rules persist flags; a hit never blocks the save)
+- Private evidence storage (file-type/size validation, authenticated serving)
+- Pump statement upload + reconciliation with persisted reviewer decisions
+- Deployment config (env vars, CORS, health check, seeded demo accounts)
+
+Contract + permission matrix + demo accounts: [`server/API.md`](server/API.md).

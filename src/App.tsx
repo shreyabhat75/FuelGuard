@@ -2,6 +2,7 @@ import React from 'react'
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { OfficeLayout, DriverLayout } from './components/layouts'
 import { currentUser } from './services/api'
+import { API_MODE, restoreSession } from './services/rest'
 import { useAppState } from './services/store'
 import type { Role } from './types'
 import Login from './pages/Login'
@@ -56,6 +57,10 @@ function RootRedirect() {
 }
 
 export default function App() {
+  React.useEffect(() => {
+    if (API_MODE) void restoreSession()
+  }, [])
+
   return (
     <BrowserRouter>
       <Routes>
