@@ -44,13 +44,86 @@ the backend, and open the frontend as usual. Login is then username-based: `driv
 `accountant`, `principal` or `admin`, password `demo123`. Without that env file the app stays in
 demo/mock mode (in-memory, any password).
 
-The stack: React 18 + TypeScript + Vite 5 + Tailwind CSS 3 + React Router 6 + Lucide +
-Recharts + qrcode.react; backend: Node + Express + PostgreSQL (pg) with automatic SQLite
-(better-sqlite3) fallback + JWT + bcrypt + Multer + Zod. The API contract, permission matrix
-and demo accounts are documented in
+## 2. System architecture
+
+One React codebase, two experiences; one Express API; one database engine with a safety net.
+
+```mermaid
+flowchart TB
+    subgraph clients["Clients — React 18 + TypeScript, Vite + Tailwind"]
+        driver["Driver app (mobile layout)<br/>5-step wizard, offline drafts, EN/Kannada"]
+        office["Office dashboard (desktop layout)<br/>entries, flags, reconciliation, approvals, audit"]
+    end
+
+    subgraph seam["Service layer (src/services) — the API seam"]
+        mock["mock mode — in-memory demo store"]
+        rest["API mode (VITE_API_MODE=rest) — real HTTP calls"]
+    end
+
+    subgraph backend["Backend — Express 4 + TypeScript on Node 22 (server/)"]
+        auth["JWT login + role permissions<br/>maker-checker approvals"]
+        routes["REST API<br/>fuel-entries, buses/QR, GPS path,<br/>flags, statements, reconciliation, audit"]
+        engine["Detection engine<br/>rule hits persist as flags,<br/>never block a save"]
+    end
+
+    subgraph data["Data"]
+        pg[("PostgreSQL — primary<br/>16 tables, migration v1")]
+        sqlite[("SQLite — automatic fallback<br/>identical schema")]
+        uploads["Private uploads/<br/>evidence files, token-gated"]
+        csv["intern_pack CSVs<br/>idempotent import, 54,522 GPS pings"]
+    end
+
+    driver --> mock
+    office --> mock
+    driver --> rest
+    office --> rest
+    rest --> auth --> routes
+    engine --> routes
+    routes --> pg
+    routes -. "PG unreachable" .-> sqlite
+    routes --> uploads
+    csv --> routes
+```
+
+- **Mock mode** keeps the demo self-contained (no network, no database) for evaluators.
+- **API mode** makes the server the single source of truth: every screen reads a role-scoped
+  `GET /bootstrap` snapshot and every action POSTs to the API, then re-reads the snapshot.
+- The server is authoritative on all permissions (frontend guards are UX only) and never
+  hard-deletes: corrections and audit events are append-only.
+
+## 3. Tech stack
+
+**Frontend (`src/`)**
+
+| Layer | Technology | Used for |
+|---|---|---|
+| UI framework | React 18 + TypeScript 5.5 | one codebase, two layouts (mobile driver / desktop office) |
+| Build | Vite 5 | dev server + production bundles |
+| Styling | Tailwind CSS 3 | utility-first styling across both layouts |
+| Routing | React Router 6 | wizard steps + office pages |
+| Charts | Recharts 2.12 | spend and efficiency charts |
+| Icons / QR | lucide-react, qrcode.react | icons; printable bus QR codes |
+
+**Backend (`server/`)**
+
+| Layer | Technology | Used for |
+|---|---|---|
+| Runtime | Node.js 22 | API server, CSV import, smoke tests |
+| Framework | Express 4 | REST API, middleware, multipart uploads |
+| Language | TypeScript (strict) | all server code |
+| Database | PostgreSQL (pg) primary · SQLite (better-sqlite3) fallback | 16-table schema, automatic fallback when PG is unreachable |
+| Auth | jsonwebtoken + bcryptjs | JWT sessions (12 h), password hashing |
+| Uploads | multer | evidence file ingestion with type/size validation |
+| Validation | zod | request-body schemas |
+| Dev tooling | tsx, esbuild | instant TS execution; single-file production bundle |
+
+**Testing:** API smoke suite (53 end-to-end checks on a fresh database) + frontend engine
+smoke (24 checks on rules and reconciliation).
+
+The API contract, permission matrix and demo accounts are documented in
 [`server/API.md`](server/API.md).
 
-## 2. Demo roles
+## 4. Demo roles
 
 Mock mode uses the role selector on the sign-in screen (any password works). **API mode** uses
 the same four demo profiles plus `admin`, authenticated by the backend with JWT:
@@ -69,7 +142,7 @@ every permission (who may create entries, review flags, import statements, decid
 enforced server-side — see the matrix in [`server/API.md`](server/API.md) — and the maker of an
 approval can never decide it.
 
-## 3. What is implemented (Part C mapping)
+## 5. What is implemented (Part C mapping)
 
 A screen-by-screen inventory against the Part C brief lives in
 [`docs/PartC-Mapping.md`](docs/PartC-Mapping.md). Highlights:
@@ -89,7 +162,7 @@ A screen-by-screen inventory against the Part C brief lives in
 - **Buses & QR management** with printable QR (bus ID only) and manual lookup (I)
 - **Audit log** of creations, views, notes, status changes and corrections — no hard deletes (J)
 
-## 4. Seeded cases & assumptions
+## 6. Seeded cases & assumptions
 
 The nine seeded investigation cases come straight from `findings.csv` (VB-03 rate premium,
 VB-02 amount mismatch, unknown vehicle KA 99 MX 4417, VB-03 statement-only bill, VB-06 tank
@@ -97,7 +170,7 @@ conflict, VB-04 duplicate pair, VB-08 holiday cash fill, VB-02 short-interval re
 claims without receipts). Data and rule assumptions are listed in
 [`docs/PartC-Mapping.md`](docs/PartC-Mapping.md#5-mock-data--rule-assumptions).
 
-## 5. Known limitations
+## 7. Known limitations
 
 - **Mock mode:** everything is client-side state; refreshing resets the demo. Run API mode for
   persistence.
@@ -113,7 +186,7 @@ claims without receipts). Data and rule assumptions are listed in
 - Drafts queued offline lose their queued photo bytes if the page is reloaded before sync; the
   entry syncs and the low-severity `ODOMETER_PHOTO_MISSING` flag records the gap.
 
-## 6. Part D — backend (Person 2, delivered)
+## 8. Part D — backend (Person 2, delivered)
 
 The backend lives in [`server/`](server/) and implements the plan in
 [`docs/Backend-APIs.md`](docs/Backend-APIs.md):
