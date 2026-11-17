@@ -1,8 +1,7 @@
 # FleetFuel Guard
 
-**Fuel accountability for Vidyanagara PU College** — Part C MVP + Part D backend for the
-ArtIntele internship project. A mobile-first fuel-entry app for drivers, a desktop
-fleet-monitoring dashboard for the office, and a real backend (PostgreSQL primary with
+**Fuel accountability for Vidyanagara PU College** — a mobile-first fuel-entry app for drivers,
+a desktop fleet-monitoring dashboard for the office, and a real backend (PostgreSQL primary with
 automatic SQLite fallback, JWT auth + RBAC,
 idempotent CSV import, detection engine, reconciliation) built on the synthetic Aug–Oct 2026
 diesel dataset (8 buses, 112 register fills, 82 pump statement lines, 54,522 GPS pings).
@@ -28,7 +27,7 @@ npm run build      # type-check + production build to dist/
 npm run preview    # serve the production build locally
 ```
 
-### Backend (Person 2 — real database + APIs)
+### Backend (real database + APIs)
 
 ```bash
 cd server
@@ -142,25 +141,25 @@ every permission (who may create entries, review flags, import statements, decid
 enforced server-side — see the matrix in [`server/API.md`](server/API.md) — and the maker of an
 approval can never decide it.
 
-## 5. What is implemented (Part C mapping)
+## 5. What is implemented
 
-A screen-by-screen inventory against the Part C brief lives in
+A screen-by-screen inventory lives in
 [`docs/PartC-Mapping.md`](docs/PartC-Mapping.md). Highlights:
 
-- **Login** with demo role selector and clear prototype disclaimer (A)
-- **Driver mobile home** with assigned bus, offline toggle, recent entries (B)
+- **Login** with demo role selector and clear prototype disclaimer
+- **Driver mobile home** with assigned bus, offline toggle, recent entries
 - **5-step pump entry wizard** — scan/simulated QR with error + manual fallback, fill details with
   live rate/capacity warnings, evidence photos with upload-failure/retry, location permission
-  states, review + confirmation, saved/needs-review result (C)
+  states, review + confirmation, saved/needs-review result
 - **Office dashboard** — KPIs (register spend ₹12,55,535.02, 112 entries, 8 buses, review counts),
-  monthly spend chart, derived efficiency chart, recent entries table with filters (D)
+  monthly spend chart, derived efficiency chart, recent entries table with filters
 - **Flagged fills list + investigation detail** with evidence-comparison cards, notes, timeline
-  and manager actions (E, F)
+  and manager actions
 - **Pump statement reconciliation** with demo CSV, match categories, reviewer decisions with
-  mandatory notes, CSV export (G)
-- **Principal approval inbox** with approve/reject/request-info, reasons and self-approval block (H)
-- **Buses & QR management** with printable QR (bus ID only) and manual lookup (I)
-- **Audit log** of creations, views, notes, status changes and corrections — no hard deletes (J)
+  mandatory notes, CSV export
+- **Principal approval inbox** with approve/reject/request-info, reasons and self-approval block
+- **Buses & QR management** with printable QR (bus ID only) and manual lookup
+- **Audit log** of creations, views, notes, status changes and corrections — no hard deletes
 
 ## 6. Seeded cases & assumptions
 
@@ -186,10 +185,9 @@ claims without receipts). Data and rule assumptions are listed in
 - Drafts queued offline lose their queued photo bytes if the page is reloaded before sync; the
   entry syncs and the low-severity `ODOMETER_PHOTO_MISSING` flag records the gap.
 
-## 8. Part D — backend (Person 2, delivered)
+## 8. Backend
 
-The backend lives in [`server/`](server/) and implements the plan in
-[`docs/Backend-APIs.md`](docs/Backend-APIs.md):
+The backend lives in [`server/`](server/):
 
 - PostgreSQL schema + migrations (users, buses, fuel_entries, GPS pings, evidence, pump
   statements, flags, approvals, corrections, audit events, reconciliation, prices/calendar/
