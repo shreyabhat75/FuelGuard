@@ -12,6 +12,7 @@ const roleDemo: { role: Role; label: string; desc: string }[] = [
   { role: 'transport_manager', label: 'Transport Manager', desc: 'Ravi S · all buses, flags, QR' },
   { role: 'accountant', label: 'Accountant', desc: 'Lakshmi Devi · pump statement' },
   { role: 'principal', label: 'Principal / Approver', desc: 'Dr. Suresh Rao · approvals' },
+  { role: 'admin', label: 'Administrator — Security & Auth', desc: 'Anand Kumar · credentials, buses & protection' },
 ]
 
 export default function Login() {

@@ -7,6 +7,7 @@ import {
   FileSpreadsheet,
   Fuel,
   Gauge,
+  KeyRound,
   LogOut,
   Menu,
   NotebookPen,
@@ -14,7 +15,9 @@ import {
   Receipt,
   ScanLine,
   ScrollText,
+  ShieldCheck,
   User as UserIcon,
+  Users,
   X,
 } from 'lucide-react'
 import { currentUser, logout, setLang } from '../services/api'
@@ -28,6 +31,7 @@ const roleLabel: Record<Role, string> = {
   transport_manager: 'Transport Manager',
   accountant: 'Accountant',
   principal: 'Principal / Approver',
+  admin: 'System Administrator',
 }
 
 export function RoleBadge() {
@@ -92,6 +96,13 @@ const navForRole: Record<Role, { to: string; label: string; icon: React.ReactNod
     { to: '/app/reports', label: 'Executive Reports', icon: <FileSpreadsheet size={18} /> },
     { to: '/app/audit', label: 'Audit Log', icon: <ScrollText size={18} /> },
   ],
+  admin: [
+    { to: '/app', label: 'Admin Overview', icon: <ShieldCheck size={18} /> },
+    { to: '/app/admin/users', label: 'User & Auth Management', icon: <Users size={18} /> },
+    { to: '/app/admin/buses', label: 'Bus Fleet & Allocation', icon: <BusIcon size={18} /> },
+    { to: '/app/admin/security', label: 'Security & Access Logs', icon: <KeyRound size={18} /> },
+    { to: '/app/audit', label: 'System Audit Log', icon: <ScrollText size={18} /> },
+  ],
 }
 
 function SwitchRoleModal({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -127,10 +138,14 @@ export function OfficeLayout() {
   const flags = s.flags.filter((f) => f.status === 'needs_review').length
   const title = useMemo(() => {
     if (pathname === '/app') {
+      if (user?.role === 'admin') return 'System Administration & Security Hub'
       if (user?.role === 'accountant') return 'Accountant Financial Hub'
       if (user?.role === 'principal') return 'Principal Governance Hub'
       return 'Transport Fleet Dashboard'
     }
+    if (pathname.startsWith('/app/admin/users')) return 'User & Authentication Management'
+    if (pathname.startsWith('/app/admin/buses')) return 'Bus Fleet & Driver Allocation'
+    if (pathname.startsWith('/app/admin/security')) return 'Security & Access Logs'
     if (pathname.startsWith('/app/entries')) return 'Fuel entries'
     if (pathname.startsWith('/app/flagged')) return 'Flagged fills'
     if (pathname.startsWith('/app/efficiency')) return 'Bus Fuel Efficiency'

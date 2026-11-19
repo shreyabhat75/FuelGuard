@@ -1,4 +1,4 @@
-export type Role = 'driver' | 'transport_manager' | 'accountant' | 'principal'
+export type Role = 'driver' | 'transport_manager' | 'accountant' | 'principal' | 'admin'
 
 export interface User {
   id: string
@@ -7,6 +7,11 @@ export interface User {
   /** driver only: bus code they are assigned to */
   busCode?: string
   username: string
+  password?: string
+  status?: 'active' | 'suspended'
+  phone?: string
+  createdAt?: string
+  lastLogin?: string
 }
 
 export interface Bus {
@@ -168,6 +173,7 @@ export interface Approval {
 
 export type AuditAction =
   | 'created'
+  | 'updated'
   | 'viewed'
   | 'status_changed'
   | 'note_added'
@@ -184,7 +190,7 @@ export type AuditAction =
 
 export interface AuditEvent {
   id: string
-  entityType: 'entry' | 'flag' | 'approval' | 'bus' | 'reconciliation' | 'statement'
+  entityType: 'entry' | 'flag' | 'approval' | 'bus' | 'reconciliation' | 'statement' | 'user'
   entityId: string
   action: AuditAction
   before?: string

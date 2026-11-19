@@ -14,6 +14,10 @@ import Dashboard from './pages/office/Dashboard'
 import BusEfficiencyPage from './pages/office/BusEfficiencyPage'
 import AccountantDashboard from './pages/office/AccountantDashboard'
 import PrincipalDashboard from './pages/office/PrincipalDashboard'
+import AdminDashboard from './pages/office/AdminDashboard'
+import AdminUsersPage from './pages/office/AdminUsersPage'
+import AdminBusesPage from './pages/office/AdminBusesPage'
+import AdminSecurityPage from './pages/office/AdminSecurityPage'
 import ReportsPage from './pages/office/ReportsPage'
 import EntriesPage from './pages/office/EntriesPage'
 import EntryDetailPage from './pages/office/EntryDetailPage'
@@ -57,6 +61,7 @@ function Guard({ allow, children }: { allow: Role[]; children: React.ReactNode }
 
 /**
  * Dispatches the appropriate role-tailored dashboard landing view on `/app`:
+ * - Admin: Organization security hub, credential authority, and bus allocation (`AdminDashboard`)
  * - Transport Manager: Fleet operations, fuel consumption, detection alerts (`Dashboard`)
  * - Accountant: Financial reconciliation hub, statement status, mismatch KPIs (`AccountantDashboard`)
  * - Principal: Executive governance, pending approval queue, decision logs (`PrincipalDashboard`)
@@ -64,6 +69,7 @@ function Guard({ allow, children }: { allow: Role[]; children: React.ReactNode }
 function OfficeIndex() {
   const s = useAppState()
   const user = currentUser(s)
+  if (user?.role === 'admin') return <AdminDashboard />
   if (user?.role === 'accountant') return <AccountantDashboard />
   if (user?.role === 'principal') return <PrincipalDashboard />
   return <Dashboard />
@@ -99,7 +105,7 @@ export default function App() {
         <Route
           path="/driver/entry"
           element={
-            <Guard allow={['driver', 'transport_manager']}>
+            <Guard allow={['driver', 'transport_manager', 'admin']}>
               <DriverLayout>
                 <EntryWizard />
               </DriverLayout>
@@ -109,7 +115,7 @@ export default function App() {
         <Route
           path="/driver/entries"
           element={
-            <Guard allow={['driver', 'transport_manager']}>
+            <Guard allow={['driver', 'transport_manager', 'admin']}>
               <DriverLayout>
                 <DriverEntries />
               </DriverLayout>
@@ -119,7 +125,7 @@ export default function App() {
         <Route
           path="/driver/entries/:entryId"
           element={
-            <Guard allow={['driver', 'transport_manager']}>
+            <Guard allow={['driver', 'transport_manager', 'admin']}>
               <DriverLayout>
                 <EntryDetailPage />
               </DriverLayout>
@@ -129,7 +135,7 @@ export default function App() {
         <Route
           path="/driver/profile"
           element={
-            <Guard allow={['driver', 'transport_manager']}>
+            <Guard allow={['driver', 'transport_manager', 'admin']}>
               <DriverLayout>
                 <DriverProfile />
               </DriverLayout>
@@ -141,16 +147,44 @@ export default function App() {
         <Route
           path="/app"
           element={
-            <Guard allow={['transport_manager', 'accountant', 'principal']}>
+            <Guard allow={['transport_manager', 'accountant', 'principal', 'admin']}>
               <OfficeLayout />
             </Guard>
           }
         >
           <Route index element={<OfficeIndex />} />
+          
+          {/* Admin Dedicated Routes */}
+          <Route
+            path="admin/users"
+            element={
+              <Guard allow={['admin']}>
+                <AdminUsersPage />
+              </Guard>
+            }
+          />
+          <Route
+            path="admin/buses"
+            element={
+              <Guard allow={['admin', 'transport_manager']}>
+                <AdminBusesPage />
+              </Guard>
+            }
+          />
+          <Route
+            path="admin/security"
+            element={
+              <Guard allow={['admin']}>
+                <AdminSecurityPage />
+              </Guard>
+            }
+          />
+
+          {/* Operational Routes */}
           <Route
             path="efficiency"
             element={
-              <Guard allow={['transport_manager']}>
+              <Guard allow={['transport_manager', 'admin']}>
                 <BusEfficiencyPage />
               </Guard>
             }
@@ -162,7 +196,7 @@ export default function App() {
           <Route
             path="reconciliation"
             element={
-              <Guard allow={['accountant', 'transport_manager']}>
+              <Guard allow={['accountant', 'transport_manager', 'admin']}>
                 <ReconciliationPage />
               </Guard>
             }
@@ -170,7 +204,7 @@ export default function App() {
           <Route
             path="approvals"
             element={
-              <Guard allow={['principal']}>
+              <Guard allow={['principal', 'admin']}>
                 <ApprovalsPage />
               </Guard>
             }
@@ -178,7 +212,7 @@ export default function App() {
           <Route
             path="buses"
             element={
-              <Guard allow={['transport_manager']}>
+              <Guard allow={['transport_manager', 'admin']}>
                 <BusesPage />
               </Guard>
             }
@@ -186,7 +220,7 @@ export default function App() {
           <Route
             path="buses/:busCode"
             element={
-              <Guard allow={['transport_manager']}>
+              <Guard allow={['transport_manager', 'admin']}>
                 <BusDetailPage />
               </Guard>
             }
@@ -194,7 +228,7 @@ export default function App() {
           <Route
             path="reports"
             element={
-              <Guard allow={['transport_manager', 'accountant', 'principal']}>
+              <Guard allow={['transport_manager', 'accountant', 'principal', 'admin']}>
                 <ReportsPage />
               </Guard>
             }

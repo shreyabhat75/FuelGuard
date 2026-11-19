@@ -41,6 +41,7 @@ In demo/mock mode, pick a role on the sign-in screen (`/login`). Any password wo
 
 | Role | Demo User | Assigned Bus | Tailored Experience & Default Landing |
 |---|---|---|---|
+| **Administrator** | Anand Kumar | Org-Wide Authority | Centralized authentication & credential governance: provision staff/drivers, generate & reset passwords, edit usernames, suspend/activate accounts, add buses, and allocate drivers (`/app` dispatches `AdminDashboard`) |
 | **Driver / Pump User** | Hanumanthappa G | VB-07 | Mobile-first fuel entry app: 5-step wizard, simulated QR scanner, manual bus search, photo capture (odometer + receipt), GPS status, offline mode with pending-sync badge, transaction history, driver profile (`/driver`) |
 | **Transport Manager** | Ravi S | Fleet-wide | Operational fleet dashboard: 7 KPI cards, 8 executive sections, spend & consumption trends, dedicated Bus Efficiency Hub (`/app/efficiency`), flag investigation detail with "Awaiting evidence" workflow, bus roster with printable QR codes (`/app`) |
 | **Accountant** | Lakshmi Devi | Finance | Financial reconciliation hub: variance KPIs, match category cards, top discrepancy table, statement CSV import, tabbed mismatch filtering, resolution notes (`/app` dispatches `AccountantDashboard`) |
@@ -130,20 +131,23 @@ src/
 |---|---|---|---|
 | `/login` | Sign-in Screen | All | 1-click role selection + credentials form |
 | `/driver` | Driver Home | `driver` | Assigned bus card, offline mode toggle, recent entries |
-| `/driver/entry` | 5-step Entry Wizard | `driver`, `transport_manager` | Scan QR / search bus → details → photos → GPS review → save |
-| `/driver/entries` | Driver Entries | `driver`, `transport_manager` | Mobile transaction history with status chips |
-| `/driver/entries/:id` | Driver Entry Detail | `driver`, `transport_manager` | Mobile view of single fill with evidence and flag reason |
-| `/driver/profile` | Driver Profile | `driver`, `transport_manager` | Driver details, assigned bus specs, sync controls, EN/Kannada |
-| `/app` | Office Landing Hub | `transport_manager`, `accountant`, `principal` | **Role-tailored:** `Dashboard` (Manager), `AccountantDashboard` (Accountant), `PrincipalDashboard` (Principal) |
-| `/app/efficiency` | Bus Efficiency Hub | `transport_manager` | Fleet efficiency comparison, top/bottom performers, km/L charts |
+| `/driver/entry` | 5-step Entry Wizard | `driver`, `transport_manager`, `admin` | Scan QR / search bus → details → photos → GPS review → save |
+| `/driver/entries` | Driver Entries | `driver`, `transport_manager`, `admin` | Mobile transaction history with status chips |
+| `/driver/entries/:id` | Driver Entry Detail | `driver`, `transport_manager`, `admin` | Mobile view of single fill with evidence and flag reason |
+| `/driver/profile` | Driver Profile | `driver`, `transport_manager`, `admin` | Driver details, assigned bus specs, sync controls, EN/Kannada |
+| `/app` | Office Landing Hub | `transport_manager`, `accountant`, `principal`, `admin` | **Role-tailored:** `AdminDashboard` (Admin), `Dashboard` (Manager), `AccountantDashboard` (Accountant), `PrincipalDashboard` (Principal) |
+| `/app/admin/users` | User & Auth Management | `admin` | Provision staff/drivers, generate & reset passwords, edit usernames, suspend accounts |
+| `/app/admin/buses` | Bus Fleet & Allocation | `admin`, `transport_manager` | Add fleet buses, allocate/reassign drivers with atomic profile sync |
+| `/app/admin/security` | Security & Access Logs | `admin` | Immutable security audit trail with 1-click CSV export |
+| `/app/efficiency` | Bus Efficiency Hub | `transport_manager`, `admin` | Fleet efficiency comparison, top/bottom performers, km/L charts |
 | `/app/entries` | Fleet Entries | All office roles | Filterable table by date, bus, pump, payment mode |
 | `/app/entries/:id` | Entry Detail | All office roles | Transaction breakdown, before/after corrections, audit trail |
 | `/app/flagged` | Flagged Fills | All office roles | Filterable table by severity, rule, status |
 | `/app/flagged/:id` | Flag Detail | All office roles | Investigation workbench: evidence comparisons, "Awaiting evidence" action |
-| `/app/reconciliation` | Statement Reconciliation | `accountant`, `transport_manager` | CSV import, match category tabs, discrepancy search, reviewer notes |
-| `/app/approvals` | Principal Approvals | `principal` | Maker-checker lock, mandatory comments on decisions, decision history |
-| `/app/buses` | Bus Roster | `transport_manager` | Fleet listing with capacity, total km, total litres, avg km/L |
-| `/app/buses/:code` | Bus Detail | `transport_manager` | Specs, printable QR sticker, recent fills |
+| `/app/reconciliation` | Statement Reconciliation | `accountant`, `transport_manager`, `admin` | CSV import, match category tabs, discrepancy search, reviewer notes |
+| `/app/approvals` | Principal Approvals | `principal`, `admin` | Maker-checker lock, mandatory comments on decisions, decision history |
+| `/app/buses` | Bus Roster | `transport_manager`, `admin` | Fleet listing with capacity, total km, total litres, avg km/L |
+| `/app/buses/:code` | Bus Detail | `transport_manager`, `admin` | Specs, printable QR sticker, recent fills |
 | `/app/reports` | Reports Hub | All office roles | Universal report generator with live preview and CSV export |
 | `/app/audit` | Audit Trail | All office roles | Immutable log of all system mutations and user actions |
 
