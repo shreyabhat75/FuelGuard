@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom'
 import { useAppState } from '../../services/store'
 import { EmptyState, Card, CardHeader, StatusChip } from '../../components/ui'
 import { fmtDateTime, inr, num } from '../../utils/format'
-import { Fuel } from 'lucide-react'
+import { ChevronRight, Fuel } from 'lucide-react'
 import { currentUser } from '../../services/api'
 
 export default function DriverEntries() {
@@ -26,14 +26,17 @@ export default function DriverEntries() {
           <ul className="divide-y divide-slate-100">
             {mine.map((e) => (
               <li key={e.id}>
-                <Link to={`/app/entries/${e.id}`} className="flex items-center justify-between gap-3 px-4 py-3 active:bg-slate-50">
+                <Link to={`/driver/entries/${e.id}`} className="flex min-h-[56px] items-center justify-between gap-3 px-4 py-3.5 transition-colors active:bg-slate-100">
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-navy-900">{fmtDateTime(e.timestampClient)}</p>
+                    <p className="truncate text-sm font-bold text-navy-900">{fmtDateTime(e.timestampClient)}</p>
                     <p className="text-xs text-slate-500 tnum">
                       {num(e.litres)} L · {inr(e.amount)} · {e.pumpName}
                     </p>
                   </div>
-                  <StatusChip status={e.status} />
+                  <div className="flex shrink-0 items-center gap-2">
+                    <StatusChip status={e.status} />
+                    <ChevronRight size={16} className="text-slate-400" />
+                  </div>
                 </Link>
               </li>
             ))}

@@ -64,35 +64,35 @@ function AttachmentBlock({
           <p className="mt-1 truncate text-xs text-slate-500">
             {attachment.name} {attachment.demo && '· demo placeholder (not a real photo)'}
           </p>
-          <div className="mt-2 flex gap-2">
-            <label className="flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border border-slate-300 px-3 text-xs font-semibold text-navy-800 hover:bg-slate-50">
-              <RefreshCw size={13} /> Replace
+          <div className="mt-2.5 flex gap-2">
+            <label className="flex h-11 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3 text-xs font-bold text-navy-800 transition-colors active:bg-slate-100">
+              <RefreshCw size={15} /> Replace
               <input type="file" accept="image/*" capture="environment" className="sr-only" onChange={(e) => onFile(e.target.files?.[0])} />
             </label>
-            <button onClick={onRemove} className="flex h-9 items-center gap-1.5 rounded-lg border border-slate-300 px-3 text-xs font-semibold text-red-600 hover:bg-red-50">
-              <Trash2 size={13} /> Remove
+            <button onClick={onRemove} className="flex h-11 flex-1 items-center justify-center gap-1.5 rounded-xl border border-red-200 bg-white px-3 text-xs font-bold text-red-600 transition-colors active:bg-red-50">
+              <Trash2 size={15} /> Remove
             </button>
           </div>
-          <p className="mt-1.5 text-xs font-medium text-teal-700">Uploaded ✓</p>
+          <p className="mt-2 text-xs font-semibold text-teal-700">Uploaded ✓</p>
         </div>
       ) : (
-        <div className="mt-2 space-y-2">
-          <label className="flex h-11 cursor-pointer items-center justify-center gap-2 rounded-lg bg-primary-600 text-sm font-semibold text-white hover:bg-primary-700">
-            <Camera size={16} /> {kind === 'odometer' ? 'Take / upload odometer photo' : 'Take / upload receipt photo'}
+        <div className="mt-2.5 space-y-2.5">
+          <label className="flex h-14 cursor-pointer items-center justify-center gap-2.5 rounded-xl bg-primary-600 text-base font-bold text-white shadow-card transition-all active:scale-[0.99] active:bg-primary-700">
+            <Camera size={20} /> {kind === 'odometer' ? 'Take / upload odometer photo' : 'Take / upload receipt photo'}
             <input type="file" accept="image/*" capture="environment" className="sr-only" onChange={(e) => onFile(e.target.files?.[0])} />
           </label>
           <div className="flex gap-2">
             <button
               onClick={() => finish({ id: `${kind}-demo`, kind, name: `demo-${kind}.svg`, url: demoPhoto(kind), demo: true })}
-              className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg border border-slate-300 text-xs font-semibold text-navy-800 hover:bg-slate-50"
+              className="flex h-10 flex-1 items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white text-xs font-semibold text-navy-800 active:bg-slate-50"
             >
-              <ImageUp size={13} /> Use demo image
+              <ImageUp size={14} /> Use demo image
             </button>
             <button
               onClick={failUpload}
-              className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg border border-slate-300 text-xs font-semibold text-slate-500 hover:bg-slate-50"
+              className="flex h-10 flex-1 items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white text-xs font-semibold text-slate-500 active:bg-slate-50"
             >
-              Simulate upload failure
+              Simulate upload error
             </button>
           </div>
           {status === 'uploading' && (
@@ -144,10 +144,10 @@ export default function Step3Evidence({ draft, patch }: { draft: Draft; patch: (
       </Field>
 
       {!draft.odometerPhoto && (
-        <label className="flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+        <label className="flex cursor-pointer items-start gap-3 rounded-xl border-2 border-amber-300 bg-amber-50/90 p-3.5 text-sm text-amber-950 transition-colors active:bg-amber-100">
           <input
             type="checkbox"
-            className="mt-0.5 h-4 w-4"
+            className="mt-0.5 h-5 w-5 rounded border-amber-400 text-primary-600 focus:ring-primary-500"
             checked={Boolean(draft.odometerPhotoException)}
             onChange={(e) => patch({ odometerPhotoException: e.target.checked })}
           />

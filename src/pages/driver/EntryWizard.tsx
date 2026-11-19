@@ -170,7 +170,7 @@ export default function EntryWizard() {
       <Step5Done
         result={result}
         offline={!s.online}
-        onViewEntry={() => nav(`/app/entries/${result.entry.id}`)}
+        onViewEntry={() => nav(`/driver/entries/${result.entry.id}`)}
         onRecordAnother={resetAll}
       />
     )
@@ -214,22 +214,30 @@ export default function EntryWizard() {
       <div className="mt-6 flex gap-3">
         <button
           onClick={onBack}
-          className="flex h-12 flex-1 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white text-sm font-semibold text-navy-800 active:bg-slate-100"
+          className="flex h-14 flex-1 items-center justify-center gap-2 rounded-2xl border border-slate-300 bg-white text-base font-bold text-navy-800 shadow-sm transition-all active:scale-[0.99] active:bg-slate-100"
         >
-          <ArrowLeft size={16} /> {t('back')}
+          <ArrowLeft size={18} /> {t('back')}
         </button>
         {step < 4 && (
           <button
             onClick={onContinue}
             disabled={!canContinue || saving}
-            className="flex h-12 flex-[2] items-center justify-center gap-2 rounded-xl bg-primary-600 text-sm font-bold text-white shadow-card transition-colors active:bg-primary-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+            className={`flex h-14 flex-[2] items-center justify-center gap-2 rounded-2xl text-base font-bold text-white shadow-md transition-all active:scale-[0.99] ${
+              saving
+                ? 'bg-primary-400 cursor-wait'
+                : canContinue
+                  ? step === 3
+                    ? 'bg-teal-600 active:bg-teal-700'
+                    : 'bg-primary-600 active:bg-primary-700'
+                  : 'bg-slate-300 text-slate-500 cursor-not-allowed'
+            }`}
           >
             {saving ? (
               'Saving…'
             ) : step === 3 ? (
-              <>{t('save')} <ArrowRight size={16} /></>
+              <>{t('save')} <ArrowRight size={18} /></>
             ) : (
-              <>{t('continue')} <ArrowRight size={16} /></>
+              <>{t('continue')} <ArrowRight size={18} /></>
             )}
           </button>
         )}

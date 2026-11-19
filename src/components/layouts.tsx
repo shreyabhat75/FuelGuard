@@ -268,6 +268,7 @@ export function DriverLayout({ children }: { children: React.ReactNode }) {
   const { t } = useI18n()
   const [quickScanOpen, setQuickScanOpen] = useState(false)
   const pendingCount = s.entries.filter((e) => e.status === 'pending_sync').length
+  const fleetBuses = s.buses ?? buses
 
   const handleSelectQuickBus = (code: string) => {
     setQuickScanOpen(false)
@@ -275,8 +276,8 @@ export function DriverLayout({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="mx-auto flex min-h-screen min-h-dvh max-w-md flex-col bg-slate-50 sm:my-0">
-      <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-slate-200 bg-white px-4 py-3">
+    <div className="mx-auto flex min-h-screen min-h-dvh w-full max-w-md flex-col bg-slate-50 overscroll-y-contain select-none sm:select-auto touch-manipulation">
+      <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur shadow-sm">
         <Brand />
         <div className="ml-auto flex items-center gap-2">
           {pendingCount > 0 && (
@@ -287,65 +288,67 @@ export function DriverLayout({ children }: { children: React.ReactNode }) {
           <LangToggle />
         </div>
       </header>
-      <main className="flex-1 pb-24">{children}</main>
+      <main className="flex-1 pb-28">{children}</main>
       
-      {/* 5-item mobile bottom navigation */}
-      <nav className="fixed inset-x-0 bottom-0 z-30 mx-auto flex max-w-md items-center justify-around border-t border-slate-200 bg-white px-1 pb-[env(safe-area-inset-bottom)] pt-1.5 shadow-lg" aria-label="Driver navigation">
+      {/* 5-item mobile bottom navigation with safe-area support */}
+      <nav className="fixed inset-x-0 bottom-0 z-30 mx-auto flex max-w-md items-center justify-around border-t border-slate-200 bg-white/95 px-1 pb-[max(env(safe-area-inset-bottom),10px)] pt-2 shadow-lg backdrop-blur" aria-label="Driver navigation">
         <NavLink
           to="/driver"
           end
           className={({ isActive }) =>
-            `flex flex-1 flex-col items-center gap-0.5 py-1 text-[11px] font-medium transition-colors ${
-              isActive ? 'font-bold text-primary-700' : 'text-slate-500 hover:text-navy-900'
+            `flex min-h-[48px] flex-1 flex-col items-center justify-center gap-1 py-1 text-[11px] font-medium transition-colors ${
+              isActive ? 'font-bold text-primary-700' : 'text-slate-500 active:text-navy-900'
             }`
           }
         >
-          <Gauge size={19} />
+          <Gauge size={20} />
           {t('dashboard')}
         </NavLink>
 
         <NavLink
           to="/driver/entry"
           className={({ isActive }) =>
-            `flex flex-1 flex-col items-center gap-0.5 py-1 text-[11px] font-medium transition-colors ${
-              isActive ? 'font-bold text-primary-700' : 'text-slate-500 hover:text-navy-900'
+            `flex min-h-[48px] flex-1 flex-col items-center justify-center gap-1 py-1 text-[11px] font-medium transition-colors ${
+              isActive ? 'font-bold text-primary-700' : 'text-slate-500 active:text-navy-900'
             }`
           }
         >
-          <PlusCircle size={19} />
+          <PlusCircle size={20} />
           {t('newFill')}
         </NavLink>
 
-        {/* Quick QR Scan Action */}
+        {/* Quick QR Scan Action Button */}
         <button
           onClick={() => setQuickScanOpen(true)}
-          className="flex flex-1 flex-col items-center gap-0.5 py-1 text-[11px] font-medium text-slate-500 hover:text-navy-900 transition-colors"
+          className="flex min-h-[48px] flex-1 flex-col items-center justify-center gap-1 py-1 text-[11px] font-medium text-primary-700 active:text-primary-900 transition-colors"
         >
-          <ScanLine size={19} className="text-primary-600" />
+          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-100 text-primary-700 active:bg-primary-200">
+            <ScanLine size={18} />
+          </div>
           {t('scanBus')}
         </button>
 
         <NavLink
           to="/driver/entries"
           className={({ isActive }) =>
-            `flex flex-1 flex-col items-center gap-0.5 py-1 text-[11px] font-medium transition-colors ${
-              isActive ? 'font-bold text-primary-700' : 'text-slate-500 hover:text-navy-900'
+            `flex min-h-[48px] flex-1 flex-col items-center justify-center gap-1 py-1 text-[11px] font-medium transition-colors ${
+              isActive ? 'font-bold text-primary-700' : 'text-slate-500 active:text-navy-900'
             }`
           }
         >
-          <Fuel size={19} />
+          <Fuel size={20} />
           {t('myEntries')}
         </NavLink>
 
         <NavLink
           to="/driver/profile"
           className={({ isActive }) =>
-            `flex flex-1 flex-col items-center gap-0.5 py-1 text-[11px] font-medium transition-colors ${
-              isActive ? 'font-bold text-primary-700' : 'text-slate-500 hover:text-navy-900'
+            `flex min-h-[48px] flex-1 flex-col items-center justify-center gap-1 py-1 text-[11px] font-medium transition-colors ${
+              isActive ? 'font-bold text-primary-700' : 'text-slate-500 active:text-navy-900'
             }`
           }
         >
-          <UserIcon size={19} />
+          <UserIcon size={20} />
           {t('profile')}
         </NavLink>
       </nav>
@@ -360,15 +363,15 @@ export function DriverLayout({ children }: { children: React.ReactNode }) {
           <p className="text-xs text-slate-500">
             Point camera at the QR sticker near fuel tank. Choose a bus below to simulate an immediate camera match:
           </p>
-          <div className="grid grid-cols-2 gap-2 pt-1">
-            {buses.map((b) => (
+          <div className="grid grid-cols-2 gap-2 pt-1 max-h-56 overflow-y-auto">
+            {fleetBuses.map((b) => (
               <button
                 key={b.busCode}
                 onClick={() => handleSelectQuickBus(b.busCode)}
-                className="flex items-center justify-between rounded-lg border border-slate-200 p-2 text-left text-xs hover:border-primary-500 hover:bg-primary-50"
+                className="flex min-h-[48px] items-center justify-between rounded-xl border border-slate-200 bg-white p-2.5 text-left text-xs active:border-primary-500 active:bg-primary-50"
               >
                 <span className="font-bold text-navy-900">{b.busCode}</span>
-                <span className="text-slate-500">{b.driverName.split(' ')[0]}</span>
+                <span className="text-slate-500 truncate ml-1">{b.driverName.split(' ')[0]}</span>
               </button>
             ))}
           </div>

@@ -126,8 +126,8 @@ export default function Step4Review({
           {draft.location.status === 'granted' ? (
             <StatusChip status="saved" />
           ) : draft.location.status === 'denied' || draft.location.status === 'unavailable' ? (
-            <button onClick={checkLoc} className="flex h-9 items-center gap-1.5 rounded-lg border border-slate-300 px-3 text-xs font-semibold text-navy-800">
-              <LocateFixed size={14} /> Try again
+            <button onClick={checkLoc} className="flex h-11 items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3.5 text-xs font-bold text-navy-800 transition-colors active:bg-slate-100">
+              <LocateFixed size={16} /> Try again
             </button>
           ) : (
             (locBusy && <Loader2 size={18} className="animate-spin text-slate-400" />)
@@ -196,14 +196,18 @@ export default function Step4Review({
       )}
 
       {/* confirmation */}
-      <label className="flex items-start gap-2.5 rounded-xl border border-navy-800/20 bg-white p-4 text-sm">
+      <label className={`flex cursor-pointer items-start gap-3.5 rounded-2xl border-2 p-4 text-sm transition-all active:scale-[0.99] ${
+        draft.confirmed
+          ? 'border-teal-500 bg-teal-50/80 shadow-sm'
+          : 'border-slate-300 bg-white hover:border-slate-400'
+      }`}>
         <input
           type="checkbox"
-          className="mt-0.5 h-5 w-5"
+          className="mt-0.5 h-6 w-6 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
           checked={draft.confirmed}
           onChange={(e) => patch({ confirmed: e.target.checked })}
         />
-        <span className="font-medium text-navy-900">
+        <span className="font-semibold text-navy-900 leading-snug">
           I confirm these details match the pump receipt. I understand the entry cannot be edited
           after saving — corrections go through the office with a reason.
         </span>

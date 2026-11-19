@@ -173,19 +173,23 @@ export default function DriverProfile() {
           }
           subtitle="Driver interface display language"
         />
-        <div className="flex gap-2.5 p-4">
+        <div className="flex gap-3 p-4">
           <button
             onClick={() => setLang('en')}
-            className={`flex-1 rounded-lg border p-3 text-center text-sm font-semibold transition-all ${
-              lang === 'en' ? 'border-primary-600 bg-primary-50 text-primary-700 ring-2 ring-primary-500/20' : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+            className={`flex h-14 flex-1 items-center justify-center rounded-xl border text-center text-base font-bold transition-all active:scale-[0.98] ${
+              lang === 'en'
+                ? 'border-primary-600 bg-primary-50 text-primary-700 ring-2 ring-primary-500/20 shadow-sm'
+                : 'border-slate-200 bg-white text-slate-700 active:bg-slate-100'
             }`}
           >
             English
           </button>
           <button
             onClick={() => setLang('kn')}
-            className={`flex-1 rounded-lg border p-3 text-center text-sm font-semibold transition-all ${
-              lang === 'kn' ? 'border-primary-600 bg-primary-50 text-primary-700 ring-2 ring-primary-500/20' : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+            className={`flex h-14 flex-1 items-center justify-center rounded-xl border text-center text-base font-bold transition-all active:scale-[0.98] ${
+              lang === 'kn'
+                ? 'border-primary-600 bg-primary-50 text-primary-700 ring-2 ring-primary-500/20 shadow-sm'
+                : 'border-slate-200 bg-white text-slate-700 active:bg-slate-100'
             }`}
           >
             ಕನ್ನಡ (Kannada)
