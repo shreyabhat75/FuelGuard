@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Bus as BusIcon, ChevronRight, Fuel, PlusCircle, Wifi, WifiOff } from 'lucide-react'
-import { setOnline, syncPendingEntries } from '../../services/api'
+import { currentUser, setOnline, syncPendingEntries } from '../../services/api'
 import { buses, useAppState } from '../../services/store'
 import { useI18n } from '../../i18n'
 import { Banner, Card, CardHeader, EmptyState, StatusChip } from '../../components/ui'
@@ -11,14 +11,18 @@ export default function DriverHome() {
   const s = useAppState()
   const { t, lang } = useI18n()
   const nav = useNavigate()
-  const bus = buses.find((b) => b.busCode === 'VB-07')!
+  const user = currentUser(s)
+  const busCode = user?.busCode ?? 'VB-07'
+  const bus = buses.find((b) => b.busCode === busCode) ?? buses.find((b) => b.busCode === 'VB-07')!
   const myEntries = s.entries.filter((e) => e.busId === bus.busCode)
   const recent = [...myEntries].sort((a, b) => b.timestampClient.localeCompare(a.timestampClient)).slice(0, 5)
   const pending = myEntries.filter((e) => e.status === 'pending_sync')
   const hour = new Date().getHours()
   const greeting =
     hour < 12 ? (lang === 'kn' ? 'ಶುಭೋದಯ' : 'Good morning') : hour < 17 ? (lang === 'kn' ? 'ಶುಭ ಮಧ್ಯಾಹ್ನ' : 'Good afternoon') : (lang === 'kn' ? 'ಶುಭ ಸಂಜೆ' : 'Good evening')
-  const user = s.currentUserId
+
+  // First name from user record
+  const firstName = user?.name?.split(' ')[0] ?? (lang === 'kn' ? 'ಚಾಲಕ' : 'driver')
 
   useEffect(() => {
     if (s.online && pending.length > 0) {
@@ -31,7 +35,7 @@ export default function DriverHome() {
     <div className="px-4 py-5">
       <section>
         <p className="text-sm text-slate-500">
-          {greeting}, {user === 'U-DRV-07' ? 'Hanumanthappa' : 'driver'} {s.online ? '· ' + t('online') : ''}
+          {greeting}, {firstName} {s.online ? '· ' + t('online') : ''}
         </p>
         <h1 className="mt-0.5 text-xl font-bold text-navy-900">{t('recordFill')}</h1>
       </section>
@@ -127,7 +131,7 @@ export default function DriverHome() {
       </Card>
 
       <p className="mt-4 text-center text-[11px] leading-relaxed text-slate-400">
-        Demo data from the ArtIntele synthetic dataset. Flags never say “fraud confirmed” — they ask for a review.
+        Demo data from the ArtIntele synthetic dataset. Flags never say "fraud confirmed" — they ask for a review.
       </p>
     </div>
   )

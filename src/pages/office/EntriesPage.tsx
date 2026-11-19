@@ -5,7 +5,6 @@ import { useAppState, buses } from '../../services/store'
 import { Button, Card, CardHeader, DataTable, EmptyState, StatusChip, inputCls } from '../../components/ui'
 import { fmtDateTime, inr, num } from '../../utils/format'
 
-const pumps = ['Shree Lakshmi Fuels', 'Highway Fuel Point', 'Other pump']
 const statuses = [
   { key: 'all', label: 'All statuses' },
   { key: 'saved', label: 'Saved' },
@@ -27,6 +26,13 @@ export default function EntriesPage() {
   const [mode, setMode] = useState('all')
   const [status, setStatus] = useState('all')
 
+  // Build unique pump list from actual data
+  const pumps = useMemo(() => {
+    const set = new Set<string>()
+    s.entries.forEach((e) => set.add(e.pumpName))
+    return [...set].sort()
+  }, [s.entries])
+
   const rows = useMemo(() => {
     const query = q.trim().toLowerCase()
     return s.entries
@@ -40,12 +46,15 @@ export default function EntriesPage() {
           e.id.toLowerCase().includes(query) ||
           e.busId.toLowerCase().includes(query) ||
           e.pumpName.toLowerCase().includes(query) ||
+          e.createdByName.toLowerCase().includes(query) ||
           (e.billNo ?? '').toLowerCase().includes(query),
       )
       .sort((a, b) => b.timestampClient.localeCompare(a.timestampClient))
   }, [s.entries, q, bus, pump, mode, status])
 
   const total = rows.reduce((a, e) => a + e.amount, 0)
+  const totalL = rows.reduce((a, e) => a + e.litres, 0)
+  const clearAll = () => { setQ(''); setBus('all'); setPump('all'); setMode('all'); setStatus('all') }
 
   return (
     <div className="space-y-4">
@@ -54,7 +63,7 @@ export default function EntriesPage() {
           <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             className={`${inputCls} pl-9`}
-            placeholder="Search entry ID, bus, pump, bill no…"
+            placeholder="Search entry ID, bus, driver, pump, bill no…"
             value={q}
             onChange={(e) => setQ(e.target.value)}
             aria-label="Search entries"
@@ -62,7 +71,7 @@ export default function EntriesPage() {
         </div>
         <select className={`${inputCls} max-w-52`} value={bus} onChange={(e) => setBus(e.target.value)} aria-label="Bus">
           <option value="all">All buses</option>
-          {buses.map((b) => <option key={b.busCode} value={b.busCode}>{b.busCode}</option>)}
+          {buses.map((b) => <option key={b.busCode} value={b.busCode}>{b.busCode} · {b.registration}</option>)}
         </select>
         <select className={`${inputCls} max-w-52`} value={pump} onChange={(e) => setPump(e.target.value)} aria-label="Pump">
           <option value="all">All pumps</option>
@@ -79,8 +88,8 @@ export default function EntriesPage() {
       <Card>
         <CardHeader
           title={`${rows.length} entries`}
-          subtitle={`Filtered total ${inr(total)}`}
-          action={<Button size="sm" variant="secondary" onClick={() => { setQ(''); setBus('all'); setPump('all'); setMode('all'); setStatus('all') }}>Clear filters</Button>}
+          subtitle={`${num(totalL, 0)} L · ${inr(total)} filtered total`}
+          action={<Button size="sm" variant="secondary" onClick={clearAll}>Clear filters</Button>}
         />
         <DataTable
           rows={rows.slice(0, 60)}
@@ -95,11 +104,11 @@ export default function EntriesPage() {
           columns={[
             { key: 'id', label: 'Entry', render: (e) => <span className="font-semibold text-navy-900">{e.id}</span> },
             { key: 'ts', label: 'When', render: (e) => <span className="tnum">{fmtDateTime(e.timestampClient)}</span> },
-            { key: 'bus', label: 'Bus', render: (e) => e.busId },
+            { key: 'bus', label: 'Bus', render: (e) => <span className="font-medium">{e.busId}</span> },
+            { key: 'driver', label: 'Driver', render: (e) => <span className="text-slate-600">{e.createdByName}</span> },
             { key: 'litres', label: 'Litres', className: 'text-right', render: (e) => <span className="tnum">{num(e.litres)}</span> },
             { key: 'amt', label: 'Amount', className: 'text-right', render: (e) => <span className="tnum">{inr(e.amount)}</span> },
             { key: 'mode', label: 'Payment', render: (e) => <span className="capitalize">{e.paymentMode.replace('_', ' ')}</span> },
-            { key: 'pump', label: 'Pump', render: (e) => <span className="text-slate-600">{e.pumpName}</span> },
             { key: 'status', label: 'Status', render: (e) => <StatusChip status={e.status} /> },
           ]}
         />

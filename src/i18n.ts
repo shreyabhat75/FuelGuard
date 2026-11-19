@@ -4,7 +4,7 @@ type Dict = Record<string, { en: string; kn: string }>
 
 /** English is complete; Kannada covers the driver-facing labels. */
 const dict: Dict = {
-  appName: { en: 'FleetFuel Guard', kn: 'ಫ್ಲೀಟ್‌ಫ್ಯುಯೆಲ್ ಗಾರ್ಡ್' },
+  appName: { en: 'FuelGuard', kn: 'ಫ್ಯೂಯೆಲ್‌ಗಾರ್ಡ್' },
   appSub: {
     en: 'Fuel accountability for Vidyanagara PU College',
     kn: 'ವಿದ್ಯಾನಗರ ಪಿಯು ಕಾಲೇಜಿನ ಇಂಧನ ಜವಾಬ್ದಾರಿ',
@@ -45,19 +45,26 @@ const dict: Dict = {
   recordAnother: { en: 'Record another fill', kn: 'ಇನ್ನೊಂದು ಭರ್ತಿ ದಾಖಲಿಸಿ' },
   logout: { en: 'Log out', kn: 'ಹೊರನಡೆ' },
   switchRole: { en: 'Switch role', kn: 'ಪಾತ್ರ ಬದಲಿಸಿ' },
-  dashboard: { en: 'Dashboard', kn: 'ಡ್ಯಾಶ್‌ಬೋರ್ಡ್' },
+  dashboard: { en: 'Home', kn: 'ಮುಖಪುಟ' },
   flagged: { en: 'Flagged fills', kn: 'ಗುರುತಿಸಿದ ಭರ್ತಿಗಳು' },
   reconciliation: { en: 'Pump statement', kn: 'ಪಂಪ್ ಹೇಳಿಕೆ' },
   approvals: { en: 'Approvals', kn: 'ಅನುಮೋದನೆಗಳು' },
   buses: { en: 'Buses & QR', kn: 'ಬಸ್‌ಗಳು & QR' },
   audit: { en: 'Audit log', kn: 'ಆಡಿಟ್ ದಾಖಲೆ' },
-  myEntries: { en: 'My entries', kn: 'ನನ್ನ ನಮೂದುಗಳು' },
+  myEntries: { en: 'History', kn: 'ಇತಿಹಾಸ' },
   confirmed: { en: 'I confirm these details are correct', kn: 'ಈ ಮಾಹಿತಿ ಸರಿ ಎಂದು ಖಚಿತಪಡಿಸುತ್ತೇನೆ' },
+  profile: { en: 'Profile', kn: 'ಪ್ರೊಫೈಲ್' },
+  assignedBus: { en: 'Assigned Bus', kn: 'ನಿಯೋಜಿತ ಬಸ್' },
+  scanBus: { en: 'Scan QR', kn: 'QR ಸ್ಕ್ಯಾನ್' },
+  newFill: { en: 'New Fill', kn: 'ಹೊಸ ಭರ್ತಿ' },
+  driverInfo: { en: 'Driver Information', kn: 'ಚಾಲಕರ ಮಾಹಿತಿ' },
+  connectivity: { en: 'Connectivity & Sync', kn: 'ಸಂಪರ್ಕ ಮತ್ತು ಸಿಂಕ್' },
+  forceSync: { en: 'Force Sync Now', kn: 'ಈಗಲೇ ಸಿಂಕ್ ಮಾಡಿ' },
 }
 
 export function useI18n() {
   const s = useAppState()
-  const t = (key: keyof typeof dict): string => dict[key][s.lang]
+  const t = (key: keyof typeof dict): string => dict[key]?.[s.lang] ?? (key as string)
   return { t, lang: s.lang }
 }
 

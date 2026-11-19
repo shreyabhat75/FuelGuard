@@ -81,7 +81,7 @@ export default function FlagDetailPage() {
 
   const [note, setNote] = useState('')
   const [resolveOpen, setResolveOpen] = useState(false)
-  const [resolveKind, setResolveKind] = useState<'under_review' | 'resolved' | 'escalated'>('under_review')
+  const [resolveKind, setResolveKind] = useState<'under_review' | 'resolved' | 'escalated' | 'awaiting_evidence'>('under_review')
   const [reason, setReason] = useState('')
   const [reasonErr, setReasonErr] = useState('')
 
@@ -118,7 +118,7 @@ export default function FlagDetailPage() {
   const isManager = user?.role === 'transport_manager'
   const bus = buses.find((b) => b.busCode === flag.busCode)
 
-  const doAction = (kind: 'under_review' | 'resolved' | 'escalated') => {
+  const doAction = (kind: 'under_review' | 'resolved' | 'escalated' | 'awaiting_evidence') => {
     if (!reason.trim()) {
       setReasonErr('A reason is required for every status change.')
       return
@@ -204,7 +204,7 @@ export default function FlagDetailPage() {
     cards.push(
       <CompareCard
         key="dup"
-          icon={<Scale size={16} className="text-amber-600" />}
+        icon={<Scale size={16} className="text-amber-600" />}
         title="Register line vs register line"
         subtitle="Same values entered twice — the pump statement holds only one bill"
         leftHeading={`Register ${a.id}`}
@@ -402,26 +402,51 @@ export default function FlagDetailPage() {
         <Card>
           <CardHeader title="Investigation actions" subtitle="Every action needs a reason and is recorded in the audit log" />
           <div className="grid gap-2.5 p-4 sm:grid-cols-2 xl:grid-cols-4">
-            <Button variant="secondary" onClick={() => { setResolveKind('under_review'); setResolveOpen(true) }} disabled={flag.status === 'under_review'}>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setResolveKind('under_review')
+                setReason('Marked under review for document check.')
+                setResolveOpen(true)
+              }}
+              disabled={flag.status === 'under_review'}
+            >
               <Tag size={15} /> Mark under review
             </Button>
             <Button
               variant="secondary"
               onClick={() => {
-                const r = 'Requesting: original receipt + payment ledger page for verification.'
-                setReason(r)
-                setFlagStatus(flag.id, 'under_review', r)
+                setResolveKind('awaiting_evidence')
+                setReason('Requesting: original printed fuel receipt + college ledger entry page for verification.')
+                setResolveOpen(true)
               }}
+              disabled={flag.status === 'awaiting_evidence'}
             >
               <Send size={15} /> Request more evidence
             </Button>
             <Button variant="secondary" onClick={() => nav(entries[0] ? `/app/entries/${entries[0].id}` : '/app/entries')} disabled={entries.length === 0}>
               <FileWarning size={15} /> Propose correction
             </Button>
-            <Button variant="danger" onClick={() => { setResolveKind('resolved'); setResolveOpen(true) }}>
-              <CheckCircle2 size={15} /> Resolve as data-entry error
+            <Button
+              variant="danger"
+              onClick={() => {
+                setResolveKind('resolved')
+                setReason('Verified documents confirm discrepancy was a clerical data-entry error.')
+                setResolveOpen(true)
+              }}
+              disabled={flag.status === 'resolved'}
+            >
+              <CheckCircle2 size={15} /> Resolve as clerical error
             </Button>
-            <Button className="sm:col-span-2 xl:col-span-4" onClick={() => { setResolveKind('escalated'); setResolveOpen(true) }} disabled={flag.status === 'escalated'}>
+            <Button
+              className="sm:col-span-2 xl:col-span-4"
+              onClick={() => {
+                setResolveKind('escalated')
+                setReason('Significant variance requires Principal approval & financial write-off review.')
+                setResolveOpen(true)
+              }}
+              disabled={flag.status === 'escalated'}
+            >
               Escalate to accountant / principal (adds to approval queue)
             </Button>
           </div>
@@ -480,12 +505,29 @@ export default function FlagDetailPage() {
       </Card>
 
       {/* resolution modal */}
-      <Modal open={resolveOpen} onClose={() => setResolveOpen(false)} title={resolveKind === 'resolved' ? 'Resolve as data-entry error' : resolveKind === 'escalated' ? 'Escalate to principal' : 'Mark under review'}>
+      <Modal
+        open={resolveOpen}
+        onClose={() => setResolveOpen(false)}
+        title={
+          resolveKind === 'resolved'
+            ? 'Resolve as data-entry error'
+            : resolveKind === 'escalated'
+              ? 'Escalate to principal'
+              : resolveKind === 'awaiting_evidence'
+                ? 'Request additional evidence'
+                : 'Mark under review'
+        }
+      >
         <div className="space-y-3">
           {resolveKind === 'resolved' && (
             <p className="text-sm text-slate-600">
-              Resolving says the record was wrong (e.g. typed twice) — it does <strong>not</strong>{' '}
+              Resolving indicates that independent records verify the error (e.g. keying mistake or corrected billing) — it does <strong>not</strong>{' '}
               declare anyone guilty of anything. The original entry stays visible with the reason.
+            </p>
+          )}
+          {resolveKind === 'awaiting_evidence' && (
+            <p className="text-sm text-slate-600">
+              This updates the case status to <strong>Awaiting Evidence</strong> and records your specific documentation request in the audit timeline.
             </p>
           )}
           {resolveKind === 'escalated' && (
@@ -495,11 +537,22 @@ export default function FlagDetailPage() {
             </p>
           )}
           <Field label="Reason (required)" htmlFor="reason" error={reasonErr}>
-            <textarea id="reason" className={inputCls} rows={3} value={reason} onChange={(e) => { setReason(e.target.value); setReasonErr('') }} placeholder="e.g. Original receipt shows ₹9,001.69; register line keyed with a typo." />
+            <textarea
+              id="reason"
+              className={inputCls}
+              rows={3}
+              value={reason}
+              onChange={(e) => { setReason(e.target.value); setReasonErr('') }}
+              placeholder="e.g. Original receipt shows ₹9,001.69; register line keyed with a typo."
+            />
           </Field>
           <div className="flex gap-2 pt-1">
             <Button variant="secondary" className="flex-1" onClick={() => setResolveOpen(false)}>Cancel</Button>
-            <Button variant={resolveKind === 'resolved' ? 'danger' : 'primary'} className="flex-1" onClick={() => doAction(resolveKind)}>
+            <Button
+              variant={resolveKind === 'resolved' ? 'danger' : 'primary'}
+              className="flex-1"
+              onClick={() => doAction(resolveKind)}
+            >
               Confirm
             </Button>
           </div>

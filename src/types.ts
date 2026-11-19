@@ -70,7 +70,7 @@ export interface FuelEntry {
   registerRef?: string
 }
 
-export type FlagStatus = 'needs_review' | 'under_review' | 'escalated' | 'resolved'
+export type FlagStatus = 'needs_review' | 'under_review' | 'awaiting_evidence' | 'escalated' | 'resolved'
 export type Severity = 'high' | 'medium' | 'low'
 
 export interface Flag {

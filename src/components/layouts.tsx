@@ -1,21 +1,26 @@
 import { useMemo, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import {
+  BarChart3,
   Bus as BusIcon,
   ClipboardCheck,
+  FileSpreadsheet,
   Fuel,
   Gauge,
   LogOut,
   Menu,
   NotebookPen,
+  PlusCircle,
   Receipt,
+  ScanLine,
   ScrollText,
+  User as UserIcon,
   X,
 } from 'lucide-react'
 import { currentUser, logout, setLang } from '../services/api'
-import { useAppState, users } from '../services/store'
+import { buses, useAppState, users } from '../services/store'
 import { useI18n } from '../i18n'
-import { Chip, Modal } from './ui'
+import { Button, Chip, Modal } from './ui'
 import type { Role } from '../types'
 
 const roleLabel: Record<Role, string> = {
@@ -62,26 +67,30 @@ export function LangToggle() {
 const navForRole: Record<Role, { to: string; label: string; icon: React.ReactNode }[]> = {
   driver: [],
   transport_manager: [
-    { to: '/app', label: 'Dashboard', icon: <Gauge size={18} /> },
-    { to: '/app/entries', label: 'Fuel entries', icon: <Fuel size={18} /> },
-    { to: '/app/flagged', label: 'Flagged fills', icon: <NotebookPen size={18} /> },
-    { to: '/app/reconciliation', label: 'Pump statement', icon: <Receipt size={18} /> },
+    { to: '/app', label: 'Fleet Overview', icon: <Gauge size={18} /> },
     { to: '/app/buses', label: 'Buses & QR', icon: <BusIcon size={18} /> },
-    { to: '/app/audit', label: 'Audit log', icon: <ScrollText size={18} /> },
+    { to: '/app/entries', label: 'Fuel Entries', icon: <Fuel size={18} /> },
+    { to: '/app/flagged', label: 'Flagged Fills', icon: <NotebookPen size={18} /> },
+    { to: '/app/efficiency', label: 'Bus Efficiency', icon: <BarChart3 size={18} /> },
+    { to: '/app/reconciliation', label: 'Pump Statement', icon: <Receipt size={18} /> },
+    { to: '/app/reports', label: 'Reports', icon: <FileSpreadsheet size={18} /> },
+    { to: '/app/audit', label: 'Audit Log', icon: <ScrollText size={18} /> },
   ],
   accountant: [
-    { to: '/app', label: 'Dashboard', icon: <Gauge size={18} /> },
-    { to: '/app/reconciliation', label: 'Pump statement', icon: <Receipt size={18} /> },
-    { to: '/app/entries', label: 'Fuel entries', icon: <Fuel size={18} /> },
-    { to: '/app/flagged', label: 'Flagged fills', icon: <NotebookPen size={18} /> },
-    { to: '/app/audit', label: 'Audit log', icon: <ScrollText size={18} /> },
+    { to: '/app', label: 'Finance Overview', icon: <Gauge size={18} /> },
+    { to: '/app/reconciliation', label: 'Statement Reconciliation', icon: <Receipt size={18} /> },
+    { to: '/app/entries', label: 'Fuel Entries', icon: <Fuel size={18} /> },
+    { to: '/app/flagged', label: 'Flagged Fills', icon: <NotebookPen size={18} /> },
+    { to: '/app/reports', label: 'Financial Reports', icon: <FileSpreadsheet size={18} /> },
+    { to: '/app/audit', label: 'Audit Log', icon: <ScrollText size={18} /> },
   ],
   principal: [
-    { to: '/app', label: 'Dashboard', icon: <Gauge size={18} /> },
-    { to: '/app/approvals', label: 'Approval inbox', icon: <ClipboardCheck size={18} /> },
-    { to: '/app/flagged', label: 'Flagged fills', icon: <NotebookPen size={18} /> },
-    { to: '/app/entries', label: 'Fuel entries', icon: <Fuel size={18} /> },
-    { to: '/app/audit', label: 'Audit log', icon: <ScrollText size={18} /> },
+    { to: '/app', label: 'Executive Overview', icon: <Gauge size={18} /> },
+    { to: '/app/approvals', label: 'Approval Inbox', icon: <ClipboardCheck size={18} /> },
+    { to: '/app/flagged', label: 'Flagged Fills', icon: <NotebookPen size={18} /> },
+    { to: '/app/entries', label: 'Fuel Entries', icon: <Fuel size={18} /> },
+    { to: '/app/reports', label: 'Executive Reports', icon: <FileSpreadsheet size={18} /> },
+    { to: '/app/audit', label: 'Audit Log', icon: <ScrollText size={18} /> },
   ],
 }
 
@@ -117,15 +126,21 @@ export function OfficeLayout() {
   const pending = s.approvals.filter((a) => a.decision === 'pending').length
   const flags = s.flags.filter((f) => f.status === 'needs_review').length
   const title = useMemo(() => {
-    if (pathname === '/app') return 'Fleet dashboard'
+    if (pathname === '/app') {
+      if (user?.role === 'accountant') return 'Accountant Financial Hub'
+      if (user?.role === 'principal') return 'Principal Governance Hub'
+      return 'Transport Fleet Dashboard'
+    }
     if (pathname.startsWith('/app/entries')) return 'Fuel entries'
     if (pathname.startsWith('/app/flagged')) return 'Flagged fills'
+    if (pathname.startsWith('/app/efficiency')) return 'Bus Fuel Efficiency'
     if (pathname.startsWith('/app/reconciliation')) return 'Pump statement reconciliation'
     if (pathname.startsWith('/app/approvals')) return 'Approval inbox'
     if (pathname.startsWith('/app/buses')) return 'Buses & QR'
+    if (pathname.startsWith('/app/reports')) return 'Reports & Analytics'
     if (pathname.startsWith('/app/audit')) return 'Audit log'
     return 'Office'
-  }, [pathname])
+  }, [pathname, user])
 
   const NavList = (
     <nav className="flex flex-col gap-1" aria-label="Main">
@@ -145,10 +160,10 @@ export function OfficeLayout() {
             {it.icon}
             {it.label}
           </span>
-          {it.label === 'Flagged fills' && flags > 0 && (
+          {it.label.includes('Flagged') && flags > 0 && (
             <span className="rounded-full bg-amber-400 px-1.5 text-[11px] font-bold text-navy-900">{flags}</span>
           )}
-          {it.label === 'Approval inbox' && pending > 0 && (
+          {it.label.includes('Approval') && pending > 0 && (
             <span className="rounded-full bg-primary-300 px-1.5 text-[11px] font-bold text-navy-900">{pending}</span>
           )}
         </NavLink>
@@ -161,7 +176,7 @@ export function OfficeLayout() {
       {/* sidebar */}
       <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col bg-navy-900 p-4 lg:flex">
         <Brand dark />
-        <div className="mt-6 flex-1">{NavList}</div>
+        <div className="mt-6 flex-1 overflow-y-auto scrollbar-thin">{NavList}</div>
         <button
           onClick={() => setSwitchOpen(true)}
           className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-400 hover:bg-navy-800 hover:text-white"
@@ -210,7 +225,7 @@ export function OfficeLayout() {
           <Outlet context={{ user }} />
         </main>
         <footer className="border-t border-slate-200 px-4 py-3 text-center text-[11px] text-slate-400 sm:px-6">
-          FleetFuel Guard MVP · synthetic demo data (ArtIntele) · flags are review prompts, not proven findings
+          FuelGuard MVP · synthetic demo data (ArtIntele) · flags are review prompts, not proven findings
         </footer>
       </div>
       <SwitchRoleModal open={switchOpen} onClose={() => setSwitchOpen(false)} />
@@ -225,55 +240,131 @@ export function Brand({ dark = false }: { dark?: boolean }) {
         <Fuel size={18} />
       </span>
       <span className="leading-tight">
-        <span className={`block text-sm font-bold ${dark ? 'text-white' : 'text-navy-900'}`}>FleetFuel Guard</span>
+        <span className={`block text-sm font-bold ${dark ? 'text-white' : 'text-navy-900'}`}>FuelGuard</span>
         <span className={`block text-[11px] ${dark ? 'text-slate-400' : 'text-slate-500'}`}>Vidyanagara PU College</span>
       </span>
     </div>
   )
 }
 
-/** Driver mobile shell with bottom navigation. */
+/** Driver mobile shell with 5-destination bottom navigation. */
 export function DriverLayout({ children }: { children: React.ReactNode }) {
   const s = useAppState()
   const user = currentUser(s)
+  const nav = useNavigate()
   const { t } = useI18n()
-  const [switchOpen, setSwitchOpen] = useState(false)
-  const tabs = [
-    { to: '/driver', label: t('dashboard'), icon: <Gauge size={20} /> },
-    { to: '/driver/entries', label: t('myEntries'), icon: <Fuel size={20} /> },
-  ]
+  const [quickScanOpen, setQuickScanOpen] = useState(false)
+  const pendingCount = s.entries.filter((e) => e.status === 'pending_sync').length
+
+  const handleSelectQuickBus = (code: string) => {
+    setQuickScanOpen(false)
+    nav('/driver/entry', { state: { preselectedBus: code, via: 'qr' } })
+  }
+
   return (
     <div className="mx-auto flex min-h-screen min-h-dvh max-w-md flex-col bg-slate-50 sm:my-0">
       <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-slate-200 bg-white px-4 py-3">
         <Brand />
         <div className="ml-auto flex items-center gap-2">
+          {pendingCount > 0 && (
+            <Chip tone="amber" className="text-[10px]">
+              {pendingCount} offline
+            </Chip>
+          )}
           <LangToggle />
         </div>
       </header>
       <main className="flex-1 pb-24">{children}</main>
-      <nav className="fixed inset-x-0 bottom-0 z-30 mx-auto flex max-w-md items-stretch justify-around border-t border-slate-200 bg-white px-2 pb-[env(safe-area-inset-bottom)] pt-1" aria-label="Driver navigation">
-        {tabs.map((tb) => (
-          <NavLink
-            key={tb.to}
-            to={tb.to}
-            end={tb.to === '/driver'}
-            className={({ isActive }) =>
-              `flex min-w-[44%] flex-col items-center gap-0.5 rounded-lg py-2 text-xs font-medium ${isActive ? 'text-primary-700' : 'text-slate-500'}`
-            }
-          >
-            {tb.icon}
-            {tb.label}
-          </NavLink>
-        ))}
-        <button
-          onClick={() => setSwitchOpen(true)}
-          className="flex min-w-[44%] flex-col items-center gap-0.5 rounded-lg py-2 text-xs font-medium text-slate-500"
+      
+      {/* 5-item mobile bottom navigation */}
+      <nav className="fixed inset-x-0 bottom-0 z-30 mx-auto flex max-w-md items-center justify-around border-t border-slate-200 bg-white px-1 pb-[env(safe-area-inset-bottom)] pt-1.5 shadow-lg" aria-label="Driver navigation">
+        <NavLink
+          to="/driver"
+          end
+          className={({ isActive }) =>
+            `flex flex-1 flex-col items-center gap-0.5 py-1 text-[11px] font-medium transition-colors ${
+              isActive ? 'font-bold text-primary-700' : 'text-slate-500 hover:text-navy-900'
+            }`
+          }
         >
-          <LogOut size={20} />
-          {t('switchRole')}
+          <Gauge size={19} />
+          {t('dashboard')}
+        </NavLink>
+
+        <NavLink
+          to="/driver/entry"
+          className={({ isActive }) =>
+            `flex flex-1 flex-col items-center gap-0.5 py-1 text-[11px] font-medium transition-colors ${
+              isActive ? 'font-bold text-primary-700' : 'text-slate-500 hover:text-navy-900'
+            }`
+          }
+        >
+          <PlusCircle size={19} />
+          {t('newFill')}
+        </NavLink>
+
+        {/* Quick QR Scan Action */}
+        <button
+          onClick={() => setQuickScanOpen(true)}
+          className="flex flex-1 flex-col items-center gap-0.5 py-1 text-[11px] font-medium text-slate-500 hover:text-navy-900 transition-colors"
+        >
+          <ScanLine size={19} className="text-primary-600" />
+          {t('scanBus')}
         </button>
+
+        <NavLink
+          to="/driver/entries"
+          className={({ isActive }) =>
+            `flex flex-1 flex-col items-center gap-0.5 py-1 text-[11px] font-medium transition-colors ${
+              isActive ? 'font-bold text-primary-700' : 'text-slate-500 hover:text-navy-900'
+            }`
+          }
+        >
+          <Fuel size={19} />
+          {t('myEntries')}
+        </NavLink>
+
+        <NavLink
+          to="/driver/profile"
+          className={({ isActive }) =>
+            `flex flex-1 flex-col items-center gap-0.5 py-1 text-[11px] font-medium transition-colors ${
+              isActive ? 'font-bold text-primary-700' : 'text-slate-500 hover:text-navy-900'
+            }`
+          }
+        >
+          <UserIcon size={19} />
+          {t('profile')}
+        </NavLink>
       </nav>
-      <SwitchRoleModal open={switchOpen} onClose={() => setSwitchOpen(false)} />
+
+      {/* Quick QR scan trigger modal */}
+      <Modal open={quickScanOpen} onClose={() => setQuickScanOpen(false)} title="Quick Scan Bus QR">
+        <div className="space-y-3 text-center">
+          <div className="mx-auto flex h-28 w-28 items-center justify-center rounded-2xl border-2 border-dashed border-primary-400 bg-primary-50">
+            <ScanLine size={48} className="animate-pulse text-primary-600" />
+          </div>
+          <p className="text-sm font-semibold text-navy-900">Scan QR on Bus Fuel Cap</p>
+          <p className="text-xs text-slate-500">
+            Point camera at the QR sticker near fuel tank. Choose a bus below to simulate an immediate camera match:
+          </p>
+          <div className="grid grid-cols-2 gap-2 pt-1">
+            {buses.map((b) => (
+              <button
+                key={b.busCode}
+                onClick={() => handleSelectQuickBus(b.busCode)}
+                className="flex items-center justify-between rounded-lg border border-slate-200 p-2 text-left text-xs hover:border-primary-500 hover:bg-primary-50"
+              >
+                <span className="font-bold text-navy-900">{b.busCode}</span>
+                <span className="text-slate-500">{b.driverName.split(' ')[0]}</span>
+              </button>
+            ))}
+          </div>
+          <Button variant="secondary" className="w-full mt-2" onClick={() => setQuickScanOpen(false)}>
+            Cancel
+          </Button>
+        </div>
+      </Modal>
+
       {user && <span className="sr-only">Signed in as {user.name}</span>}
     </div>
   )
@@ -286,16 +377,4 @@ export function usePillCounts() {
     openFlags: s.flags.filter((f) => f.status === 'needs_review' || f.status === 'escalated').length,
     demoUsers: users,
   }
-}
-
-export function ChipRow({ items }: { items: { tone: Parameters<typeof Chip>[0]['tone']; label: string }[] }) {
-  return (
-    <div className="flex flex-wrap gap-2">
-      {items.map((i) => (
-        <Chip key={i.label} tone={i.tone}>
-          {i.label}
-        </Chip>
-      ))}
-    </div>
-  )
 }

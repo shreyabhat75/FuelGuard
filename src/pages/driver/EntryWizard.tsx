@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { ArrowLeft, ArrowRight, Check, MapPin, Camera, ClipboardCheck, Search, CircleCheckBig } from 'lucide-react'
 import type { GeoPoint, PaidBy, PaymentMode, PhotoAttachment, User } from '../../types'
 import { currentUser } from '../../services/api'
@@ -65,6 +65,7 @@ export default function EntryWizard() {
   const s = useAppState()
   const { t, lang } = useI18n()
   const nav = useNavigate()
+  const location = useLocation()
   const user = currentUser(s) as User
   const [step, setStep] = useState(0)
   const [draft, setDraft] = useState<Draft>(emptyDraft)
@@ -72,6 +73,20 @@ export default function EntryWizard() {
   const [result, setResult] = useState<SaveResult | null>(null)
 
   const patch = (p: Partial<Draft>) => setDraft((d) => ({ ...d, ...p }))
+
+  // Support pre-selecting a bus from Quick Scan in bottom navigation
+  useEffect(() => {
+    const st = location.state as { preselectedBus?: string; via?: 'qr' | 'manual' } | null
+    if (st?.preselectedBus) {
+      setDraft((d) => ({
+        ...d,
+        busId: st.preselectedBus,
+        busVia: st.via || 'qr',
+        confirmed: true,
+      }))
+      setStep(1)
+    }
+  }, [location.state])
 
   const canContinue = useMemo(() => {
     switch (step) {

@@ -9,7 +9,12 @@ import Login from './pages/Login'
 import DriverHome from './pages/driver/DriverHome'
 import EntryWizard from './pages/driver/EntryWizard'
 import DriverEntries from './pages/driver/DriverEntries'
+import DriverProfile from './pages/driver/DriverProfile'
 import Dashboard from './pages/office/Dashboard'
+import BusEfficiencyPage from './pages/office/BusEfficiencyPage'
+import AccountantDashboard from './pages/office/AccountantDashboard'
+import PrincipalDashboard from './pages/office/PrincipalDashboard'
+import ReportsPage from './pages/office/ReportsPage'
 import EntriesPage from './pages/office/EntriesPage'
 import EntryDetailPage from './pages/office/EntryDetailPage'
 import FlaggedPage from './pages/office/FlaggedPage'
@@ -50,6 +55,20 @@ function Guard({ allow, children }: { allow: Role[]; children: React.ReactNode }
   return <>{children}</>
 }
 
+/**
+ * Dispatches the appropriate role-tailored dashboard landing view on `/app`:
+ * - Transport Manager: Fleet operations, fuel consumption, detection alerts (`Dashboard`)
+ * - Accountant: Financial reconciliation hub, statement status, mismatch KPIs (`AccountantDashboard`)
+ * - Principal: Executive governance, pending approval queue, decision logs (`PrincipalDashboard`)
+ */
+function OfficeIndex() {
+  const s = useAppState()
+  const user = currentUser(s)
+  if (user?.role === 'accountant') return <AccountantDashboard />
+  if (user?.role === 'principal') return <PrincipalDashboard />
+  return <Dashboard />
+}
+
 function RootRedirect() {
   const s = useAppState()
   const user = currentUser(s)
@@ -66,6 +85,7 @@ export default function App() {
       <Routes>
         <Route path="/login" element={<Login />} />
 
+        {/* Driver Experience */}
         <Route
           path="/driver"
           element={
@@ -106,7 +126,18 @@ export default function App() {
             </Guard>
           }
         />
+        <Route
+          path="/driver/profile"
+          element={
+            <Guard allow={['driver', 'transport_manager']}>
+              <DriverLayout>
+                <DriverProfile />
+              </DriverLayout>
+            </Guard>
+          }
+        />
 
+        {/* Office Experience */}
         <Route
           path="/app"
           element={
@@ -115,7 +146,15 @@ export default function App() {
             </Guard>
           }
         >
-          <Route index element={<Dashboard />} />
+          <Route index element={<OfficeIndex />} />
+          <Route
+            path="efficiency"
+            element={
+              <Guard allow={['transport_manager']}>
+                <BusEfficiencyPage />
+              </Guard>
+            }
+          />
           <Route path="entries" element={<EntriesPage />} />
           <Route path="entries/:entryId" element={<EntryDetailPage />} />
           <Route path="flagged" element={<FlaggedPage />} />
@@ -149,6 +188,14 @@ export default function App() {
             element={
               <Guard allow={['transport_manager']}>
                 <BusDetailPage />
+              </Guard>
+            }
+          />
+          <Route
+            path="reports"
+            element={
+              <Guard allow={['transport_manager', 'accountant', 'principal']}>
+                <ReportsPage />
               </Guard>
             }
           />

@@ -10,7 +10,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { inr } from '../utils/format'
+import { inr, num } from '../utils/format'
 
 const AXIS = { fontSize: 11, fill: '#64748b' }
 
@@ -34,6 +34,30 @@ export function MonthlySpendChart({ data }: { data: { month: string; amount: num
             contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e2e8f0' }}
           />
           <Bar dataKey="amount" fill="#264ae5" radius={[6, 6, 0, 0]} maxBarSize={56} />
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  )
+}
+
+export function ConsumptionTrendChart({ data }: { data: { month: string; litres: number }[] }) {
+  return (
+    <div className="h-56 w-full" role="img" aria-label="Monthly fuel consumption trend chart">
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={data} margin={{ top: 8, right: 8, left: 8, bottom: 4 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+          <XAxis dataKey="month" tick={AXIS} tickLine={false} axisLine={{ stroke: '#e2e8f0' }} />
+          <YAxis
+            tick={AXIS}
+            tickLine={false}
+            axisLine={false}
+            tickFormatter={(v: number) => `${v.toFixed(0)} L`}
+          />
+          <Tooltip
+            formatter={(v: number | string) => [`${num(Number(v), 1)} L`, 'Litres Consumed']}
+            contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e2e8f0' }}
+          />
+          <Bar dataKey="litres" fill="#0d9488" radius={[6, 6, 0, 0]} maxBarSize={56} />
         </BarChart>
       </ResponsiveContainer>
     </div>
