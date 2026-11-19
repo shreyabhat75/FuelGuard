@@ -232,7 +232,6 @@ export function OfficeLayout() {
             <Menu size={20} />
           </button>
           <h1 className="min-w-0 flex-1 truncate text-lg font-bold text-navy-900">{title}</h1>
-          <LangToggle />
           <RoleBadge />
         </header>
         <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-5 sm:px-6 sm:py-6">
