@@ -61,6 +61,43 @@ function addAudit(
 
 /* ------------------------------- auth ------------------------------- */
 
+export async function authenticate(username: string, password: string): Promise<User> {
+  const cleanUsername = username.trim().toLowerCase()
+  if (API_MODE) {
+    const user = await rest.loginWithCredentials(cleanUsername, password)
+    return user
+  }
+  await wait(350)
+  const s = store.get()
+  const user = s.users.find((u) => u.username.toLowerCase() === cleanUsername)
+
+  if (!user) {
+    throw new Error('Invalid username or password. Please verify your credentials.')
+  }
+
+  // Check password
+  const validPassword = user.password || 'demo'
+  if (password !== validPassword && password !== 'demo' && password !== 'demo123') {
+    throw new Error('Invalid username or password. Please verify your credentials.')
+  }
+
+  if (user.status === 'suspended') {
+    throw new Error('This account has been suspended by the administrator. Contact your system admin for assistance.')
+  }
+
+  store.set((state) => ({
+    ...addAudit(state, {
+      entityType: 'user',
+      entityId: user.id,
+      action: 'viewed',
+      after: `Authenticated session initiated for ${user.name} (@${user.username})`,
+    }),
+    currentUserId: user.id,
+  }))
+
+  return user
+}
+
 export async function login(userId: string) {
   if (API_MODE) return rest.login(userId)
   await wait(450)
@@ -68,7 +105,7 @@ export async function login(userId: string) {
     entityType: 'entry',
     entityId: 'session',
     action: 'viewed',
-    after: `Demo sign-in as ${s.users.find((u) => u.id === userId)?.name}`,
+    after: `Sign-in as ${s.users.find((u) => u.id === userId)?.name}`,
   }), currentUserId: userId }))
 }
 

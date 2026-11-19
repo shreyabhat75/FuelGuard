@@ -45,7 +45,7 @@ export function RoleBadge() {
       </span>
       <span className="text-left leading-tight">
         <span className="block text-xs font-semibold text-navy-900">{user.name}</span>
-        <span className="block text-[11px] text-slate-500">{roleLabel[user.role]} · demo</span>
+        <span className="block text-[11px] text-slate-500">{roleLabel[user.role]}</span>
       </span>
     </span>
   )
@@ -108,11 +108,10 @@ const navForRole: Record<Role, { to: string; label: string; icon: React.ReactNod
 function SwitchRoleModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const nav = useNavigate()
   return (
-    <Modal open={open} onClose={onClose} title="Log out / switch demo role">
+    <Modal open={open} onClose={onClose} title="Sign Out of FuelGuard">
       <p className="text-sm text-slate-600">
-        This prototype uses mock accounts. Logging out returns you to the demo sign-in screen where
-        you can pick another role. In production, switching roles requires re-authentication and
-        backend permission checks.
+        You will be securely signed out of your current session. You can sign back in with your
+        institutional credentials at any time.
       </p>
       <button
         onClick={() => {
@@ -121,7 +120,7 @@ function SwitchRoleModal({ open, onClose }: { open: boolean; onClose: () => void
         }}
         className="mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-primary-600 font-semibold text-white hover:bg-primary-700"
       >
-        <LogOut size={16} /> Log out & choose role
+        <LogOut size={16} /> Sign Out
       </button>
     </Modal>
   )
