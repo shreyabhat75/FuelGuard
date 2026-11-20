@@ -25,6 +25,8 @@ services:
       - key: TOKEN_TTL_HOURS
         value: 12
       - key: CORS_ORIGIN
+        value: https://fleetfuel-guard-web.onrender.com
+      - key: CORS_ORIGIN_FALLBACK
         fromService:
           type: web
           name: fleetfuel-guard-web
@@ -43,10 +45,7 @@ services:
       - key: VITE_API_MODE
         value: rest
       - key: VITE_API_URL
-        fromService:
-          type: web
-          name: fleetfuel-guard-api
-          property: host
+        value: https://fleetfuel-guard-api.onrender.com
     routes:
       - type: rewrite
         source: /*

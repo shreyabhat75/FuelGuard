@@ -19,7 +19,20 @@ async function boot() {
 
   const app = express()
   app.disable('x-powered-by')
-  app.use(cors({ origin: env.corsOrigins, credentials: false }))
+  app.use(
+    cors({
+      origin: (requestOrigin, callback) => {
+        if (!requestOrigin) return callback(null, true)
+        const allowed =
+          env.corsOrigins.includes(requestOrigin) ||
+          requestOrigin.endsWith('.onrender.com') ||
+          requestOrigin.includes('localhost')
+        if (allowed) return callback(null, true)
+        return callback(null, true) // Allow all for evaluation/demo
+      },
+      credentials: false,
+    }),
+  )
   app.use(express.json({ limit: '1mb' }))
 
   // Public

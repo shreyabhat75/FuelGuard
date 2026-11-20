@@ -11,7 +11,11 @@ import { RAW } from '../data/raw'
 export const API_MODE = import.meta.env.VITE_API_MODE === 'rest'
 
 function apiUrl(value?: string): string {
-  const raw = (value?.trim() || 'http://localhost:4000/api').replace(/\/+$/, '')
+  let raw = (value?.trim() || (import.meta.env.PROD ? 'https://fleetfuel-guard-api.onrender.com/api' : 'http://localhost:4000/api')).replace(/\/+$/, '')
+  // If Render or cloud hosting passed an internal bare service name without a domain (e.g. "fleetfuel-guard-api"):
+  if (!raw.includes('.') && !raw.includes('localhost') && !raw.includes(':')) {
+    raw = `${raw}.onrender.com`
+  }
   const withProtocol = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`
   return /\/api$/i.test(withProtocol) ? withProtocol : `${withProtocol}/api`
 }
