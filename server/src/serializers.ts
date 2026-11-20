@@ -58,9 +58,11 @@ export function serializeEvidence(e: Row): ApiPhoto {
 }
 
 export async function serializeEntry(e: Row) {
-  const evidence = (await sqlAll<Row>('SELECT * FROM evidence WHERE entry_id = ? ORDER BY created_at', [
-    s(e.id),
-  ])) as Row[]
+  const evidence = (await sqlAll<Row>(
+    `SELECT id, entry_id, kind, file_name, mime, size, demo, created_by, created_at
+     FROM evidence WHERE entry_id = ? ORDER BY created_at`,
+    [s(e.id)],
+  )) as Row[]
   const odometer = evidence.find((x) => s(x.kind) === 'odometer')
   const receipt = evidence.find((x) => s(x.kind) === 'receipt')
   const location =

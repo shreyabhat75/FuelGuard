@@ -16,6 +16,7 @@ export interface Migration {
 
 const AUTO_PK = (d: Dialect) => (d === 'sqlite' ? 'INTEGER PRIMARY KEY AUTOINCREMENT' : 'SERIAL PRIMARY KEY')
 const R = (d: Dialect) => (d === 'sqlite' ? 'REAL' : 'DOUBLE PRECISION')
+const BINARY = (d: Dialect) => (d === 'sqlite' ? 'BLOB' : 'BYTEA')
 
 export const MIGRATIONS: Migration[] = [
   {
@@ -233,6 +234,13 @@ CREATE TABLE places (
   lat   ${R(d)} NOT NULL,
   lng   ${R(d)} NOT NULL
 );
+`,
+  },
+  {
+    version: 2,
+    name: 'database-backed-evidence',
+    sql: (d: Dialect) => `
+ALTER TABLE evidence ADD COLUMN content ${BINARY(d)};
 `,
   },
 ]

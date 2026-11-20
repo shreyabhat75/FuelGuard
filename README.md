@@ -203,3 +203,20 @@ The backend lives in [`server/`](server/):
 - Deployment config (env vars, CORS, health check, seeded demo accounts)
 
 Contract + permission matrix + demo accounts: [`server/API.md`](server/API.md).
+
+## 9. Deploy to Render
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/shreyabhat75/FuelGuard)
+
+The root [`render.yaml`](render.yaml) creates the complete stack in Singapore:
+
+- `fleetfuel-guard-web` — static Vite/React site with the React Router rewrite
+- `fleetfuel-guard-api` — Node/Express web service with `/api/health`
+- `fleetfuel-guard-db` — PostgreSQL, connected through Render's private network
+
+In Render, choose **New → Blueprint**, connect this repository, select `main`, and apply the
+Blueprint. Render generates the JWT secret and wires the frontend URL, CORS origin and database
+URL automatically. Uploaded evidence is stored in PostgreSQL, not Render's ephemeral filesystem.
+
+Exact Blueprint and manual setup instructions, environment variables, verification and
+troubleshooting: [`docs/Render-Deployment.md`](docs/Render-Deployment.md).

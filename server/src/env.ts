@@ -1,14 +1,20 @@
 import path from 'node:path'
 import fs from 'node:fs'
-import { fileURLToPath } from 'node:url'
 
 const resolve = (p: string, fallback: string) => {
   const v = process.env[p]
   return v && v.trim() ? v.trim() : fallback
 }
 
-const here = path.dirname(fileURLToPath(import.meta.url))
-const repoRoot = path.resolve(here, '..', '..')
+const origin = (value: string) => {
+  const trimmed = value.trim().replace(/\/$/, '')
+  return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`
+}
+
+// All documented commands run from either the repository root or server/.
+// Avoid import.meta.url here because the production build is a CommonJS bundle.
+const cwd = process.cwd()
+const repoRoot = path.basename(cwd).toLowerCase() === 'server' ? path.dirname(cwd) : cwd
 
 /**
  * Minimal .env loader: reads `server/.env` (gitignored) and fills process.env
@@ -33,7 +39,8 @@ export const env = {
   dbPath: path.resolve(repoRoot, resolve('DB_PATH', 'server/data/fleetfuel.db')),
   uploadDir: path.resolve(repoRoot, resolve('UPLOAD_DIR', 'server/uploads')),
   dataDir: path.resolve(repoRoot, resolve('DATA_DIR', 'intern_pack/intern_pack')),
-  corsOrigins: resolve('CORS_ORIGIN', 'http://localhost:5173').split(',').map((s) => s.trim()),
+  // Render service references expose a bare hostname; normalise it to an HTTPS origin.
+  corsOrigins: resolve('CORS_ORIGIN', 'http://localhost:5173').split(',').map(origin),
   tokenTtlHours: Number(resolve('TOKEN_TTL_HOURS', '12')),
   isDev: resolve('NODE_ENV', 'development') !== 'production',
 }
