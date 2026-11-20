@@ -1,0 +1,2 @@
+# Python 3.11 or newer.
+# The detection rules, the tests and the investigation use the standard library only.

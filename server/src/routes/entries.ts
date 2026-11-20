@@ -13,15 +13,10 @@ import { runEntryChecks } from '../rules'
 import { audit, entryScope, nextEntryId, nextFlagId, paged } from '../helpers'
 import { nowIso } from '../time'
 
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, env.uploadDir),
-  filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname || '').toLowerCase().slice(0, 8) || '.jpg'
-    cb(null, `${Date.now()}-${crypto.randomBytes(6).toString('hex')}${ext}`)
-  },
-})
 const upload = multer({
-  storage,
+  // Render's filesystem is ephemeral. Store upload buffers in the database;
+  // file_path remains available for evidence created before migration v2.
+  storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024, files: 2 },
   fileFilter: (_req, file, cb) => {
     const ok = ['image/jpeg', 'image/png', 'image/webp'].includes(file.mimetype)
@@ -224,11 +219,12 @@ entriesRouter.post('/fuel-entries', requireAuth, requireRole('driver', 'transpor
     for (const kind of ['odometer', 'receipt'] as const) {
       const f = files[kind === 'odometer' ? 'odometerPhoto' : 'receiptPhoto']?.[0]
       if (f) {
+        const evidenceId = crypto.randomUUID()
         evidenceRows.push({ kind })
         await sqlRun(
-          `INSERT INTO evidence (id, entry_id, kind, file_path, file_name, mime, size, demo, created_by, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
-          [crypto.randomUUID(), id, kind, f.filename, f.originalname || `${kind}.jpg`, f.mimetype, f.size, user.id, tsServer],
+          `INSERT INTO evidence (id, entry_id, kind, file_path, file_name, mime, size, demo, created_by, created_at, content)
+           VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`,
+          [evidenceId, id, kind, `db:${evidenceId}`, f.originalname || `${kind}.jpg`, f.mimetype, f.size, user.id, tsServer, f.buffer],
         )
       }
     }
@@ -418,25 +414,35 @@ entriesRouter.post('/fuel-entries/:id/evidence', requireAuth, requireRole('drive
     if (!f) continue
     const evidenceId = crypto.randomUUID()
     await sqlRun(
-      `INSERT INTO evidence (id, entry_id, kind, file_path, file_name, mime, size, demo, created_by, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
-      [evidenceId, req.params.id, kind, f.filename, f.originalname || `${kind}.jpg`, f.mimetype, f.size, user.id, nowIso()],
+      `INSERT INTO evidence (id, entry_id, kind, file_path, file_name, mime, size, demo, created_by, created_at, content)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`,
+      [evidenceId, req.params.id, kind, `db:${evidenceId}`, f.originalname || `${kind}.jpg`, f.mimetype, f.size, user.id, nowIso(), f.buffer],
     )
     out.push({ id: evidenceId, kind })
   }
   await audit('entry', req.params.id, 'synced', { id: user.id, name: user.name }, {
     after: out.length ? `Evidence attached: ${out.map((o) => o.kind).join(', ')}` : 'No files provided',
   })
-  const evidenceRows = (await sqlAll<Record<string, unknown>>('SELECT * FROM evidence WHERE entry_id = ?', [
-    req.params.id,
-  ])) as Record<string, unknown>[]
+  const evidenceRows = (await sqlAll<Record<string, unknown>>(
+    `SELECT id, entry_id, kind, file_name, mime, size, demo, created_by, created_at
+     FROM evidence WHERE entry_id = ?`,
+    [req.params.id],
+  )) as Record<string, unknown>[]
   res.status(201).json({ evidence: evidenceRows.map(serializeEvidence), attached: out })
 }))
 
 /** GET /api/evidence/:id/file — private download (auth required, driver scoped). */
 entriesRouter.get('/evidence/:id/file', requireAuth, ah(async (req, res) => {
   const user = req.user!
-  const ev = await sqlGet<{ id: string; entry_id: string; file_path: string; mime: string; demo: number }>(
+  const ev = await sqlGet<{
+    id: string
+    entry_id: string
+    file_path: string
+    file_name: string
+    mime: string
+    demo: number
+    content: Buffer | null
+  }>(
     'SELECT * FROM evidence WHERE id = ?',
     [req.params.id],
   )
@@ -455,6 +461,15 @@ entriesRouter.get('/evidence/:id/file', requireAuth, ah(async (req, res) => {
     res.status(404).json({ error: 'Demo placeholder — no stored file' })
     return
   }
+  if (ev.content) {
+    const fileName = path.basename(ev.file_name || 'evidence').replace(/["\r\n]/g, '_')
+    res.setHeader('Content-Type', ev.mime)
+    res.setHeader('Content-Disposition', `inline; filename="${fileName}"`)
+    res.send(ev.content)
+    return
+  }
+
+  // Backwards compatibility for evidence uploaded before migration v2.
   const filePath = path.join(env.uploadDir, ev.file_path)
   if (!fs.existsSync(filePath)) {
     res.status(404).json({ error: 'File missing from storage' })

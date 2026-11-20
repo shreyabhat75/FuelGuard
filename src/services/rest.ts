@@ -1,5 +1,5 @@
 /**
- * REST client for the FleetFuel Guard backend (Person 2 deliverable).
+ * REST client for the FleetFuel Guard backend.
  * Enabled with VITE_API_MODE=rest; the default mock service in api.ts is
  * untouched so the app still works fully offline.
  */
@@ -9,7 +9,15 @@ import type { RuleHit } from '../utils/rules'
 import { RAW } from '../data/raw'
 
 export const API_MODE = import.meta.env.VITE_API_MODE === 'rest'
-export const API_URL: string = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:4000/api'
+
+function apiUrl(value?: string): string {
+  const raw = (value?.trim() || 'http://localhost:4000/api').replace(/\/+$/, '')
+  const withProtocol = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`
+  return /\/api$/i.test(withProtocol) ? withProtocol : `${withProtocol}/api`
+}
+
+// Render's fromService.host value has no scheme or /api suffix; full URLs still work locally.
+export const API_URL = apiUrl(import.meta.env.VITE_API_URL as string | undefined)
 
 let token: string = localStorage.getItem('ffg_token') ?? ''
 
