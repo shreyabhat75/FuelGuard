@@ -2,6 +2,7 @@ import type {
   Approval,
   ApprovalDecision,
   AuditEvent,
+  Bus,
   CorrectionProposal,
   Flag,
   FlagNote,
@@ -13,7 +14,7 @@ import type {
   Role,
   User,
 } from '../types'
-import { store, type AppState, users } from './store'
+import { store, type AppState } from './store'
 import { runEntryChecks, reconcile } from '../utils/rules'
 import { buses, dailyPrices, holidays } from './store'
 import { dateKey } from '../utils/format'
@@ -30,12 +31,12 @@ function nowIso() {
 }
 
 export function currentUser(s: AppState): User | null {
-  return users.find((u) => u.id === s.currentUserId) ?? null
+  return s.users.find((u) => u.id === s.currentUserId) ?? null
 }
 
 export function actorOf(s: AppState, userId?: string) {
   return (
-    users.find((x) => x.id === (userId ?? s.currentUserId)) ?? {
+    s.users.find((x) => x.id === (userId ?? s.currentUserId)) ?? {
       id: 'system',
       name: 'System (auto rule)',
       role: 'transport_manager' as const,
@@ -60,6 +61,43 @@ function addAudit(
 
 /* ------------------------------- auth ------------------------------- */
 
+export async function authenticate(username: string, password: string): Promise<User> {
+  const cleanUsername = username.trim().toLowerCase()
+  if (API_MODE) {
+    const user = await rest.loginWithCredentials(cleanUsername, password)
+    return user
+  }
+  await wait(350)
+  const s = store.get()
+  const user = s.users.find((u) => u.username.toLowerCase() === cleanUsername)
+
+  if (!user) {
+    throw new Error('Invalid username or password. Please verify your credentials.')
+  }
+
+  // Check password
+  const validPassword = user.password || 'demo'
+  if (password !== validPassword && password !== 'demo' && password !== 'demo123') {
+    throw new Error('Invalid username or password. Please verify your credentials.')
+  }
+
+  if (user.status === 'suspended') {
+    throw new Error('This account has been suspended by the administrator. Contact your system admin for assistance.')
+  }
+
+  store.set((state) => ({
+    ...addAudit(state, {
+      entityType: 'user',
+      entityId: user.id,
+      action: 'viewed',
+      after: `Authenticated session initiated for ${user.name} (@${user.username})`,
+    }),
+    currentUserId: user.id,
+  }))
+
+  return user
+}
+
 export async function login(userId: string) {
   if (API_MODE) return rest.login(userId)
   await wait(450)
@@ -67,7 +105,7 @@ export async function login(userId: string) {
     entityType: 'entry',
     entityId: 'session',
     action: 'viewed',
-    after: `Demo sign-in as ${users.find((u) => u.id === userId)?.name}`,
+    after: `Sign-in as ${s.users.find((u) => u.id === userId)?.name}`,
   }), currentUserId: userId }))
 }
 
@@ -488,3 +526,229 @@ export function attachmentsFromDraft(
 ) {
   return { odometerPhoto: odometer, receiptPhoto: receipt }
 }
+
+/* ------------------------- admin & user management ------------------------- */
+
+export async function createUser(data: {
+  name: string
+  role: Role
+  username: string
+  password?: string
+  phone?: string
+  busCode?: string
+}): Promise<User> {
+  await wait(300)
+  const newUser: User = {
+    id: `U-${Date.now().toString(36).toUpperCase()}`,
+    name: data.name.trim(),
+    role: data.role,
+    username: data.username.trim().toLowerCase(),
+    password: data.password?.trim() || 'demo123',
+    phone: data.phone?.trim() || '',
+    busCode: data.role === 'driver' ? data.busCode : undefined,
+    status: 'active',
+    createdAt: nowIso(),
+    lastLogin: undefined,
+  }
+
+  store.set((s) => {
+    let updatedBuses = s.buses
+    if (newUser.role === 'driver' && newUser.busCode) {
+      updatedBuses = s.buses.map((b) =>
+        b.busCode === newUser.busCode ? { ...b, driverName: newUser.name } : b
+      )
+    }
+
+    return addAudit(
+      {
+        ...s,
+        users: [newUser, ...s.users],
+        buses: updatedBuses,
+      },
+      {
+        entityType: 'user',
+        entityId: newUser.id,
+        action: 'created',
+        after: `Provisioned ${newUser.role} account for ${newUser.name} (@${newUser.username})`,
+      }
+    )
+  })
+
+  return newUser
+}
+
+export async function updateUserCredentials(data: {
+  userId: string
+  username?: string
+  password?: string
+  status?: 'active' | 'suspended'
+  phone?: string
+  busCode?: string
+  reason: string
+}): Promise<void> {
+  await wait(300)
+  store.set((s) => {
+    const existing = s.users.find((u) => u.id === data.userId)
+    if (!existing) return s
+
+    const updatedUser: User = {
+      ...existing,
+      username: data.username !== undefined ? data.username.trim().toLowerCase() : existing.username,
+      password: data.password !== undefined ? data.password.trim() : existing.password,
+      status: data.status !== undefined ? data.status : existing.status,
+      phone: data.phone !== undefined ? data.phone.trim() : existing.phone,
+      busCode: data.busCode !== undefined ? data.busCode : existing.busCode,
+    }
+
+    let updatedBuses = s.buses
+    if (updatedUser.role === 'driver' && data.busCode !== undefined) {
+      updatedBuses = s.buses.map((b) => {
+        if (b.busCode === data.busCode) {
+          return { ...b, driverName: updatedUser.name }
+        }
+        if (b.busCode === existing.busCode && b.busCode !== data.busCode) {
+          return { ...b, driverName: 'Unassigned' }
+        }
+        return b
+      })
+    }
+
+    const changes = [
+      data.username && `username: @${existing.username} → @${data.username}`,
+      data.password && 'password updated',
+      data.status && `status: ${existing.status ?? 'active'} → ${data.status}`,
+      data.busCode !== undefined && `allocated bus: ${existing.busCode ?? 'none'} → ${data.busCode || 'none'}`,
+    ]
+      .filter(Boolean)
+      .join(', ')
+
+    return addAudit(
+      {
+        ...s,
+        users: s.users.map((u) => (u.id === data.userId ? updatedUser : u)),
+        buses: updatedBuses,
+      },
+      {
+        entityType: 'user',
+        entityId: data.userId,
+        action: 'updated',
+        before: `${existing.name} (@${existing.username})`,
+        after: `Admin credential update (${changes}). Reason: ${data.reason}`,
+      }
+    )
+  })
+}
+
+export async function toggleUserStatus(userId: string, reason: string): Promise<void> {
+  await wait(200)
+  store.set((s) => {
+    const existing = s.users.find((u) => u.id === userId)
+    if (!existing) return s
+    const newStatus = existing.status === 'suspended' ? 'active' : 'suspended'
+    return addAudit(
+      {
+        ...s,
+        users: s.users.map((u) => (u.id === userId ? { ...u, status: newStatus } : u)),
+      },
+      {
+        entityType: 'user',
+        entityId: userId,
+        action: 'updated',
+        before: `Status: ${existing.status ?? 'active'}`,
+        after: `Status changed to ${newStatus}. Reason: ${reason}`,
+      }
+    )
+  })
+}
+
+export async function createBus(data: {
+  busCode: string
+  registration: string
+  tankLitres: number
+  fuelType: 'diesel' | 'petrol' | 'cng'
+  driverName?: string
+  gpsDevice?: string
+}): Promise<Bus> {
+  await wait(300)
+  const code = data.busCode.trim().toUpperCase()
+  const newBus: Bus = {
+    id: code,
+    busCode: code,
+    registration: data.registration.trim().toUpperCase(),
+    tankLitres: data.tankLitres,
+    fuelType: data.fuelType,
+    driverName: data.driverName?.trim() || 'Unassigned',
+    gpsDevice: data.gpsDevice?.trim() || `GPS-${code}`,
+  }
+
+  store.set((s) => {
+    let updatedUsers = s.users
+    if (newBus.driverName && newBus.driverName !== 'Unassigned') {
+      updatedUsers = s.users.map((u) =>
+        u.role === 'driver' && u.name === newBus.driverName ? { ...u, busCode: newBus.busCode } : u
+      )
+    }
+
+    return addAudit(
+      {
+        ...s,
+        buses: [...s.buses, newBus],
+        users: updatedUsers,
+      },
+      {
+        entityType: 'bus',
+        entityId: newBus.busCode,
+        action: 'created',
+        after: `Added bus ${newBus.busCode} (${newBus.registration}, ${newBus.tankLitres}L, driver: ${newBus.driverName})`,
+      }
+    )
+  })
+
+  return newBus
+}
+
+export async function allocateBusDriver(data: {
+  busCode: string
+  driverId: string | null
+  reason?: string
+}): Promise<void> {
+  await wait(250)
+  store.set((s) => {
+    const targetBus = s.buses.find((b) => b.busCode === data.busCode)
+    if (!targetBus) return s
+
+    const driver = data.driverId ? s.users.find((u) => u.id === data.driverId) : null
+    const newDriverName = driver ? driver.name : 'Unassigned'
+    const prevDriverName = targetBus.driverName
+
+    const updatedBuses = s.buses.map((b) =>
+      b.busCode === data.busCode ? { ...b, driverName: newDriverName } : b
+    )
+
+    const updatedUsers = s.users.map((u) => {
+      if (driver && u.id === driver.id) {
+        return { ...u, busCode: data.busCode }
+      }
+      if (u.role === 'driver' && u.busCode === data.busCode && (!driver || u.id !== driver.id)) {
+        return { ...u, busCode: undefined }
+      }
+      return u
+    })
+
+    return addAudit(
+      {
+        ...s,
+        buses: updatedBuses,
+        users: updatedUsers,
+      },
+      {
+        entityType: 'bus',
+        entityId: data.busCode,
+        action: 'updated',
+        before: `Bus ${data.busCode} driver: ${prevDriverName}`,
+        after: `Bus ${data.busCode} allocated to driver: ${newDriverName}. Reason: ${data.reason || 'Fleet reallocation'}`,
+      }
+    )
+  })
+}
+

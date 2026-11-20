@@ -1,126 +1,379 @@
 import React, { useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
-import { Fuel as FuelIcon, LogIn, ShieldCheck, Wifi, WifiOff } from 'lucide-react'
-import { currentUser, login } from '../services/api'
-import { useAppState, users } from '../services/store'
-import { Banner, Button, Card, Field, inputCls } from '../components/ui'
+import {
+  ArrowRight,
+  ChevronDown,
+  ChevronUp,
+  Eye,
+  EyeOff,
+  Fuel as FuelIcon,
+  HelpCircle,
+  KeyRound,
+  Lock,
+  LogIn,
+  Receipt,
+  ShieldCheck,
+  User as UserIcon,
+  Users,
+} from 'lucide-react'
+import { authenticate, currentUser } from '../services/api'
+import { useAppState } from '../services/store'
+import { Banner, Button, Card, Chip, Field, Modal, inputCls } from '../components/ui'
 import { Brand } from '../components/layouts'
-import type { Role } from '../types'
 
-const roleDemo: { role: Role; label: string; desc: string }[] = [
-  { role: 'driver', label: 'Driver — fuel entry', desc: 'Hanumanthappa G · bus VB-07' },
-  { role: 'transport_manager', label: 'Transport Manager', desc: 'Ravi S · all buses, flags, QR' },
-  { role: 'accountant', label: 'Accountant', desc: 'Lakshmi Devi · pump statement' },
-  { role: 'principal', label: 'Principal / Approver', desc: 'Dr. Suresh Rao · approvals' },
+interface InstitutionalAccount {
+  role: string
+  name: string
+  username: string
+  password: string
+  description: string
+  badgeTone: 'violet' | 'blue' | 'teal' | 'amber' | 'slate'
+}
+
+const INSTITUTIONAL_ACCOUNTS: InstitutionalAccount[] = [
+  {
+    role: 'Administrator',
+    name: 'Anand Kumar',
+    username: 'admin',
+    password: 'demo',
+    description: 'Credential authority, user provisioning, bus allocations & security',
+    badgeTone: 'violet',
+  },
+  {
+    role: 'Transport Manager',
+    name: 'Ravi S',
+    username: 'manager',
+    password: 'demo',
+    description: 'Fleet oversight, km/L efficiency, fuel logs & flag investigations',
+    badgeTone: 'blue',
+  },
+  {
+    role: 'Accountant',
+    name: 'Lakshmi Devi',
+    username: 'accountant',
+    password: 'demo',
+    description: 'Financial matching, pump statement reconciliation & invoice variance',
+    badgeTone: 'teal',
+  },
+  {
+    role: 'Principal',
+    name: 'Dr. Suresh Rao',
+    username: 'principal',
+    password: 'demo',
+    description: 'Executive governance, exception approvals & maker-checker enforcement',
+    badgeTone: 'amber',
+  },
+  {
+    role: 'Driver',
+    name: 'Hanumanthappa G',
+    username: 'driver',
+    password: 'demo',
+    description: 'Mobile fuel entry wizard, bus QR scanner & odometer photo capture (VB-07)',
+    badgeTone: 'slate',
+  },
 ]
 
 export default function Login() {
   const s = useAppState()
   const user = currentUser(s)
   const nav = useNavigate()
-  const [roleIdx, setRoleIdx] = useState(0)
+
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
+  const [rememberMe, setRememberMe] = useState(true)
+  const [showPassword, setShowPassword] = useState(false)
+  const [directoryOpen, setDirectoryOpen] = useState(false)
+  const [forgotModalOpen, setForgotModalOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
 
   if (user) return <Navigate to={user.role === 'driver' ? '/driver' : '/app'} replace />
 
-  const selected = users.find((u) => u.role === roleDemo[roleIdx].role)!
-
-  const submit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setBusy(true)
     setErr('')
+
+    if (!username.trim()) {
+      setErr('Please enter your institutional username.')
+      return
+    }
+    if (!password) {
+      setErr('Please enter your account password.')
+      return
+    }
+
+    setBusy(true)
     try {
-      await login(selected.id)
-      nav(selected.role === 'driver' ? '/driver' : '/app')
-    } catch {
-      setErr('Demo sign-in failed. Try again.')
+      const authenticatedUser = await authenticate(username, password)
+      nav(authenticatedUser.role === 'driver' ? '/driver' : '/app')
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        setErr(error.message)
+      } else {
+        setErr('Authentication failed. Please verify your credentials.')
+      }
     } finally {
       setBusy(false)
     }
   }
 
+  const handleFillCredentials = (acc: InstitutionalAccount) => {
+    setUsername(acc.username)
+    setPassword(acc.password)
+    setErr('')
+  }
+
   return (
     <div className="flex min-h-screen flex-col bg-slate-100 lg:flex-row">
-      {/* left / top brand panel */}
-      <div className="flex flex-col justify-between bg-navy-900 px-6 py-10 text-white lg:w-[42%] lg:px-12 lg:py-12">
-        <Brand dark />
-        <div className="mt-10 lg:mt-0">
-          <h1 className="text-2xl font-bold sm:text-3xl">
-            Replace the paper fuel register.
-            <span className="block text-primary-300">Make suspicious fills visible — together with the evidence.</span>
-          </h1>
-          <p className="mt-4 max-w-md text-sm leading-relaxed text-slate-300">
-            Diesel fills for the college’s 8 buses are compared against the pump statement, the
-            published price and GPS data. Anything unusual is saved and marked <strong>Needs
-            review</strong> — never “fraud confirmed”. Humans decide.
-          </p>
-          <ul className="mt-6 space-y-2 text-sm text-slate-300">
-            <li className="flex items-center gap-2"><ShieldCheck size={16} className="text-teal-400" /> Every correction keeps the original value</li>
-            <li className="flex items-center gap-2"><ShieldCheck size={16} className="text-teal-400" /> Works offline; drafts sync when back online</li>
-            <li className="flex items-center gap-2"><ShieldCheck size={16} className="text-teal-400" /> Audit trail for every view, note and decision</li>
-            <li className="flex items-center gap-2"><FuelIcon size={16} className="text-teal-400" /> 8 buses, 112 register fills, 82 pump lines (synthetic)</li>
-          </ul>
+      {/* Left Brand Panel */}
+      <div className="flex flex-col justify-between bg-navy-950 px-6 py-10 text-white lg:w-[44%] lg:px-12 lg:py-14">
+        <div>
+          <Brand dark />
+          <div className="mt-12">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-teal-500/30 bg-teal-500/10 px-3 py-1 text-xs font-semibold text-teal-400">
+              <ShieldCheck size={14} /> Institutional Security System
+            </span>
+            <h1 className="mt-4 text-2xl font-bold tracking-tight sm:text-3.5xl sm:leading-tight">
+              Enterprise Fleet Fuel Governance & Anomaly Detection
+            </h1>
+            <p className="mt-4 text-sm leading-relaxed text-slate-300">
+              Comprehensive platform for bus fleet fuel monitoring, automated pump statement reconciliation, and cryptographic audit security.
+            </p>
+
+            <div className="mt-8 space-y-4">
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-teal-500/10 text-teal-400">
+                  <FuelIcon size={16} />
+                </div>
+                <div>
+                  <div className="text-xs font-semibold text-white">Automated Rate & Tank Verification</div>
+                  <div className="text-xs text-slate-400">
+                    Validates fuel fills against published daily diesel benchmarks and bus tank thresholds.
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-teal-500/10 text-teal-400">
+                  <Receipt size={16} />
+                </div>
+                <div>
+                  <div className="text-xs font-semibold text-white">Automated Statement Reconciliation</div>
+                  <div className="text-xs text-slate-400">
+                    Matches petrol pump credit billing lines against digital driver register entries to the rupee.
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-teal-500/10 text-teal-400">
+                  <Users size={16} />
+                </div>
+                <div>
+                  <div className="text-xs font-semibold text-white">Role-Based Zero-Trust Architecture</div>
+                  <div className="text-xs text-slate-400">
+                    Tailored, segregated portals for Drivers, Transport Managers, Accountants, and Principals.
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-teal-500/10 text-teal-400">
+                  <ShieldCheck size={16} />
+                </div>
+                <div>
+                  <div className="text-xs font-semibold text-white">Immutable Audit Logging</div>
+                  <div className="text-xs text-slate-400">
+                    Every transaction, review note, and credential adjustment is cryptographically recorded.
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
-        <p className="mt-10 text-[11px] text-slate-500">
-          ArtIntele internship project · synthetic dataset (fictional college, buses and people)
-        </p>
+
+        <div className="mt-12 border-t border-slate-800 pt-6 text-[11px] text-slate-500">
+          FuelGuard Fleet Infrastructure · Protected by Institutional RBAC Governance
+        </div>
       </div>
 
-      {/* right form */}
-      <div className="flex flex-1 items-center justify-center px-4 py-8 sm:px-8">
-        <Card className="w-full max-w-md p-6">
-          <h2 className="text-lg font-bold text-navy-900">Demo sign-in</h2>
-          <p className="mt-1 text-sm text-slate-500">
-            Pick a role, then press sign in. Mock authentication for the prototype.
-          </p>
+      {/* Right Form Panel */}
+      <div className="flex flex-1 items-center justify-center px-4 py-10 sm:px-8">
+        <div className="w-full max-w-md space-y-4">
+          <Card className="p-7 shadow-lg">
+            <div className="flex items-center gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-navy-900 text-white">
+                <Lock size={20} />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-navy-900">Sign In to FuelGuard</h2>
+                <p className="text-xs text-slate-500">
+                  Enter your institutional credentials to access your fleet portal
+                </p>
+              </div>
+            </div>
 
-          <form onSubmit={submit} className="mt-5 space-y-4">
-            <fieldset>
-              <legend className="mb-2 text-sm font-medium text-navy-800">Demo role</legend>
-              <div className="space-y-2" role="radiogroup" aria-label="Demo role">
-                {roleDemo.map((r, i) => (
+            <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+              <Field label="Username" htmlFor="username" hint="Institutional account identifier" required>
+                <div className="relative">
+                  <UserIcon size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    id="username"
+                    type="text"
+                    autoComplete="username"
+                    autoFocus
+                    placeholder="Enter your username"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    className={`${inputCls} pl-9 font-mono text-sm`}
+                    required
+                  />
+                </div>
+              </Field>
+
+              <Field label="Password" htmlFor="password" hint="Case-sensitive account password" required>
+                <div className="relative flex items-center">
+                  <KeyRound size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    id="password"
+                    type={showPassword ? 'text' : 'password'}
+                    autoComplete="current-password"
+                    placeholder="Enter your password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className={`${inputCls} pl-9 pr-10 font-mono text-sm`}
+                    required
+                  />
                   <button
                     type="button"
-                    key={r.role}
-                    role="radio"
-                    aria-checked={roleIdx === i}
-                    onClick={() => setRoleIdx(i)}
-                    className={`flex w-full items-center justify-between rounded-lg border px-4 py-3 text-left transition-colors ${
-                      roleIdx === i ? 'border-primary-500 bg-primary-50 ring-1 ring-primary-500' : 'border-slate-300 bg-white hover:bg-slate-50'
-                    }`}
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    title={showPassword ? 'Hide password' : 'Show password'}
+                    tabIndex={-1}
                   >
-                    <span>
-                      <span className="block text-sm font-semibold text-navy-900">{r.label}</span>
-                      <span className="block text-xs text-slate-500">{r.desc}</span>
-                    </span>
-                    <span
-                      className={`h-4 w-4 rounded-full border-2 ${roleIdx === i ? 'border-primary-600 bg-primary-600' : 'border-slate-300'}`}
-                      aria-hidden
-                    />
+                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
-                ))}
+                </div>
+              </Field>
+
+              {/* Options Row */}
+              <div className="flex items-center justify-between text-xs">
+                <label className="flex items-center gap-2 cursor-pointer text-slate-600">
+                  <input
+                    type="checkbox"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                    className="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                  />
+                  <span>Remember this device</span>
+                </label>
+
+                <button
+                  type="button"
+                  onClick={() => setForgotModalOpen(true)}
+                  className="font-medium text-primary-600 hover:underline"
+                >
+                  Forgot password?
+                </button>
               </div>
-            </fieldset>
 
-            <Field label="Username" htmlFor="username" required>
-              <input id="username" className={inputCls} value={selected.username} readOnly />
-            </Field>
-            <Field label="Password" htmlFor="password" hint="Any value works in the demo." required>
-              <input id="password" type="password" className={inputCls} defaultValue="demo" autoComplete="off" />
-            </Field>
+              {err && <Banner tone="danger" title={err} />}
 
-            {err && <Banner tone="danger" title={err} />}
+              <Button type="submit" size="lg" className="w-full justify-center" disabled={busy}>
+                {busy ? (
+                  'Authenticating…'
+                ) : (
+                  <>
+                    <LogIn size={18} /> Sign In
+                  </>
+                )}
+              </Button>
+            </form>
 
-            <Button type="submit" size="lg" className="w-full" disabled={busy}>
-              {busy ? 'Signing in…' : <><LogIn size={18} /> Sign in</>}
-            </Button>
-            <p className="text-center text-xs text-slate-400">
-              Prototype only: no password check, no server. <span className="inline-flex items-center gap-1"><Wifi size={12} />/ <WifiOff size={12} /> offline toggle lives in the driver app.</span>
-            </p>
-          </form>
-        </Card>
+            {/* Quick Access Directory Accordion */}
+            <div className="mt-6 border-t border-slate-100 pt-4">
+              <button
+                type="button"
+                onClick={() => setDirectoryOpen(!directoryOpen)}
+                className="flex w-full items-center justify-between rounded-lg bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 transition-colors"
+              >
+                <span className="flex items-center gap-1.5">
+                  <Users size={14} className="text-navy-700" />
+                  Institutional Access Directory
+                </span>
+                {directoryOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+              </button>
+
+              {directoryOpen && (
+                <div className="mt-3 space-y-2 rounded-lg border border-slate-200 bg-white p-3">
+                  <div className="text-[11px] font-medium text-slate-500 mb-2">
+                    Click any account to populate credentials:
+                  </div>
+                  <div className="divide-y divide-slate-100">
+                    {INSTITUTIONAL_ACCOUNTS.map((acc) => (
+                      <button
+                        key={acc.username}
+                        type="button"
+                        onClick={() => handleFillCredentials(acc)}
+                        className="flex w-full items-center justify-between py-2 text-left hover:bg-slate-50 px-1 rounded transition-colors"
+                      >
+                        <div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs font-bold text-navy-900">{acc.name}</span>
+                            <Chip tone={acc.badgeTone}>{acc.role}</Chip>
+                          </div>
+                          <div className="font-mono text-[11px] text-slate-500">
+                            Username: <strong className="text-navy-800">@{acc.username}</strong> · Password: <span className="font-mono">{acc.password}</span>
+                          </div>
+                          <div className="text-[10px] text-slate-400 mt-0.5">{acc.description}</div>
+                        </div>
+                        <ArrowRight size={13} className="text-slate-400 shrink-0 ml-2" />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </Card>
+
+          <p className="text-center text-xs text-slate-400">
+            FuelGuard Platform v1.0 · Protected by Zero-Trust Role-Based Access Control
+          </p>
+        </div>
       </div>
+
+      {/* Forgot Password Modal */}
+      {forgotModalOpen && (
+        <Modal
+          open={forgotModalOpen}
+          onClose={() => setForgotModalOpen(false)}
+          title="Institutional Credential Support"
+        >
+          <div className="space-y-4 text-sm text-slate-600">
+            <div className="flex items-center gap-3 rounded-lg border border-primary-200 bg-primary-50 p-3 text-primary-900">
+              <HelpCircle size={24} className="text-primary-600 shrink-0" />
+              <div className="text-xs">
+                In FuelGuard, password security and account provisioning are centrally governed by the <strong>System Administrator</strong> to ensure organizational integrity.
+              </div>
+            </div>
+
+            <p className="text-xs leading-relaxed">
+              To request a password reset or recover account access:
+            </p>
+            <ol className="list-decimal pl-5 text-xs space-y-1.5 text-slate-600">
+              <li>Contact your institution’s Fleet Administrator (<strong>@admin</strong>).</li>
+              <li>The Administrator will verify your identity and generate a new secure password.</li>
+              <li>Your credential update will be recorded in the security audit logs for compliance.</li>
+            </ol>
+
+            <div className="pt-2 text-right">
+              <Button variant="primary" onClick={() => setForgotModalOpen(false)}>
+                Understood
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   )
 }

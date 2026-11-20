@@ -4,7 +4,7 @@
  * untouched so the app still works fully offline.
  */
 import { store } from './store'
-import type { FuelEntry, PhotoAttachment } from '../types'
+import type { FuelEntry, PhotoAttachment, Role, User } from '../types'
 import type { RuleHit } from '../utils/rules'
 import { RAW } from '../data/raw'
 
@@ -14,6 +14,7 @@ export const API_URL: string = (import.meta.env.VITE_API_URL as string | undefin
 let token: string = localStorage.getItem('ffg_token') ?? ''
 
 const DEMO_USERNAMES: Record<string, string> = {
+  'U-ADMIN': 'admin',
   'U-DRV-07': 'driver',
   'U-TM': 'manager',
   'U-ACC': 'accountant',
@@ -89,6 +90,25 @@ export async function login(userId: string): Promise<void> {
   token = r.token
   localStorage.setItem('ffg_token', token)
   await fetchBootstrap()
+}
+
+export async function loginWithCredentials(username: string, password: string): Promise<User> {
+  const r = await req<{ token: string; user: { id: string; username: string; name: string; role: Role; busCode?: string } }>('/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password }),
+  })
+  token = r.token
+  localStorage.setItem('ffg_token', token)
+  await fetchBootstrap()
+  const user: User = {
+    id: r.user.id,
+    name: r.user.name,
+    role: r.user.role,
+    username: r.user.username,
+    busCode: r.user.busCode,
+  }
+  return user
 }
 
 /** Keeps the session across page reloads when a token exists. */

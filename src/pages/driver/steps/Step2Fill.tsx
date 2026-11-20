@@ -47,57 +47,66 @@ export default function Step2Fill({ draft, patch }: { draft: Draft; patch: (p: P
 
       <div className="grid grid-cols-2 gap-3">
         <Field label="Litres filled" htmlFor="litres" required error={litresErr}>
-          <input
-            id="litres"
-            className={inputCls}
-            inputMode="decimal"
-            type="number"
-            min="0"
-            step="0.1"
-            placeholder="e.g. 131.9"
-            value={draft.litres}
-            onChange={(e) => patch({ litres: e.target.value })}
-          />
+          <div className="relative">
+            <input
+              id="litres"
+              className={`${inputCls} h-13 pr-8 text-lg font-bold tnum`}
+              inputMode="decimal"
+              type="number"
+              min="0"
+              step="0.01"
+              placeholder="0.0"
+              value={draft.litres}
+              onChange={(e) => patch({ litres: e.target.value })}
+            />
+            <span className="pointer-events-none absolute right-3 top-3.5 text-xs font-bold text-slate-400">L</span>
+          </div>
         </Field>
         <Field label="Amount paid (₹)" htmlFor="amount" required error={amountErr}>
-          <input
-            id="amount"
-            className={inputCls}
-            inputMode="decimal"
-            type="number"
-            min="0"
-            step="0.01"
-            placeholder="e.g. 12302.31"
-            value={draft.amount}
-            onChange={(e) => patch({ amount: e.target.value })}
-          />
+          <div className="relative">
+            <span className="pointer-events-none absolute left-3 top-3.5 text-base font-bold text-slate-400">₹</span>
+            <input
+              id="amount"
+              className={`${inputCls} h-13 pl-7 text-lg font-bold tnum`}
+              inputMode="decimal"
+              type="number"
+              min="0"
+              step="0.01"
+              placeholder="0.00"
+              value={draft.amount}
+              onChange={(e) => patch({ amount: e.target.value })}
+            />
+          </div>
         </Field>
       </div>
 
       <Field label="Odometer reading (km)" htmlFor="odometer" required error={odoErr}>
-        <input
-          id="odometer"
-          className={inputCls}
-          inputMode="numeric"
-          type="number"
-          min="0"
-          step="1"
-          placeholder="e.g. 62788"
-          value={draft.odometer}
-          onChange={(e) => patch({ odometer: e.target.value })}
-        />
+        <div className="relative">
+          <input
+            id="odometer"
+            className={`${inputCls} h-13 pr-10 text-lg font-bold tnum`}
+            inputMode="numeric"
+            type="number"
+            min="0"
+            step="1"
+            placeholder="e.g. 62788"
+            value={draft.odometer}
+            onChange={(e) => patch({ odometer: e.target.value })}
+          />
+          <span className="pointer-events-none absolute right-3 top-3.5 text-xs font-bold text-slate-400">KM</span>
+        </div>
       </Field>
 
       <div className="grid grid-cols-2 gap-3">
         <Field label="Fuel type" htmlFor="fuelType">
-          <select id="fuelType" className={inputCls} value={draft.fuelType} onChange={(e) => patch({ fuelType: e.target.value as Draft['fuelType'] })}>
+          <select id="fuelType" className={`${inputCls} h-12 text-base font-medium`} value={draft.fuelType} onChange={(e) => patch({ fuelType: e.target.value as Draft['fuelType'] })}>
             <option value="diesel">Diesel</option>
             <option value="petrol">Petrol</option>
             <option value="cng">CNG</option>
           </select>
         </Field>
         <Field label="Who paid" htmlFor="paidBy">
-          <select id="paidBy" className={inputCls} value={draft.paidBy} onChange={(e) => patch({ paidBy: e.target.value as Draft['paidBy'] })}>
+          <select id="paidBy" className={`${inputCls} h-12 text-base font-medium`} value={draft.paidBy} onChange={(e) => patch({ paidBy: e.target.value as Draft['paidBy'] })}>
             {paidByOptions.map((o) => (
               <option key={o.value} value={o.value}>{o.label}</option>
             ))}
@@ -106,7 +115,7 @@ export default function Step2Fill({ draft, patch }: { draft: Draft; patch: (p: P
       </div>
 
       <Field label="Payment method" htmlFor="paymentMode">
-        <select id="paymentMode" className={inputCls} value={draft.paymentMode} onChange={(e) => patch({ paymentMode: e.target.value as Draft['paymentMode'] })}>
+        <select id="paymentMode" className={`${inputCls} h-12 text-base font-medium`} value={draft.paymentMode} onChange={(e) => patch({ paymentMode: e.target.value as Draft['paymentMode'] })}>
           {paymentOptions.map((o) => (
             <option key={o.value} value={o.value}>{o.label}</option>
           ))}
@@ -114,7 +123,7 @@ export default function Step2Fill({ draft, patch }: { draft: Draft; patch: (p: P
       </Field>
 
       <Field label="Pump" htmlFor="pump">
-        <select id="pump" className={inputCls} value={draft.pump} onChange={(e) => patch({ pump: e.target.value })}>
+        <select id="pump" className={`${inputCls} h-12 text-base font-medium`} value={draft.pump} onChange={(e) => patch({ pump: e.target.value })}>
           {pumpOptions.map((p) => (
             <option key={p} value={p}>{p}</option>
           ))}
@@ -124,7 +133,7 @@ export default function Step2Fill({ draft, patch }: { draft: Draft; patch: (p: P
       <Field label="Pump bill / receipt no. (optional)" htmlFor="billNo" hint="Printed on the receipt, e.g. SLF/71251.">
         <input
           id="billNo"
-          className={inputCls}
+          className={`${inputCls} h-12 text-base`}
           placeholder="e.g. SLF/71251"
           value={draft.billNo}
           onChange={(e) => patch({ billNo: e.target.value })}

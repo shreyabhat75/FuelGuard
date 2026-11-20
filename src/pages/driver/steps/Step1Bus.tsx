@@ -66,52 +66,58 @@ export default function Step1Bus({ draft, patch }: { draft: Draft; patch: (p: Pa
       {/* scan */}
       <button
         onClick={startScan}
-        className="flex h-16 w-full items-center justify-center gap-3 rounded-xl bg-navy-800 text-base font-bold text-white shadow-card active:bg-navy-900"
+        className="flex h-16 w-full items-center justify-center gap-3 rounded-2xl bg-navy-800 text-base font-bold text-white shadow-card transition-all active:scale-[0.99] active:bg-navy-900"
       >
-        <ScanLine size={22} /> Scan bus QR
+        <ScanLine size={24} className="text-teal-400" /> Scan bus QR
       </button>
       <p className="text-center text-xs text-slate-500">
-        Prototype camera simulation — picks a bus from the seeded fleet. Manual search is always available.
+        Simulated QR camera scan for fast pump check-in. Or choose from list below.
       </p>
 
       <div className="flex items-center gap-3">
         <span className="h-px flex-1 bg-slate-200" />
-        <span className="text-xs font-medium text-slate-400">or</span>
+        <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">or manual select</span>
         <span className="h-px flex-1 bg-slate-200" />
       </div>
 
       {/* manual search */}
       <div>
         <input
-          className={inputCls}
-          placeholder="Search by bus code or registration (e.g. VB-07, KA 99 VB 1007)"
+          className={`${inputCls} h-12 text-base font-medium`}
+          placeholder="Search bus (e.g. VB-07 or KA 99 VB 1007)"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           aria-label="Search buses"
+          autoComplete="off"
         />
-        <ul className="mt-2 max-h-56 space-y-2 overflow-y-auto scrollbar-thin">
+        <ul className="mt-2.5 max-h-60 space-y-2 overflow-y-auto scrollbar-thin">
           {results.map((b) => (
             <li key={b.busCode}>
               <button
                 onClick={() => selectBus(b, 'manual')}
-                className={`flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left ${
-                  draft.busId === b.busCode ? 'border-primary-500 bg-primary-50' : 'border-slate-200 bg-white hover:bg-slate-50'
+                className={`flex min-h-[52px] w-full items-center gap-3 rounded-xl border p-3 text-left transition-colors active:scale-[0.99] ${
+                  draft.busId === b.busCode
+                    ? 'border-primary-500 bg-primary-50 ring-2 ring-primary-500/20'
+                    : 'border-slate-200 bg-white hover:bg-slate-50 active:bg-slate-100'
                 }`}
               >
-                <BusIcon size={18} className="shrink-0 text-slate-400" />
+                <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${draft.busId === b.busCode ? 'bg-primary-600 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                  <BusIcon size={20} />
+                </div>
                 <span className="min-w-0 flex-1">
-                  <span className="block text-sm font-semibold text-navy-900">
-                    {b.busCode} · {b.registration}
+                  <span className="flex items-center justify-between">
+                    <span className="text-base font-bold text-navy-900">{b.busCode}</span>
+                    <span className="text-xs font-semibold tnum text-slate-600">{b.registration}</span>
                   </span>
-                  <span className="block text-xs text-slate-500">{b.driverName} · tank {b.tankLitres} L</span>
+                  <span className="block text-xs text-slate-500">{b.driverName} · Tank {b.tankLitres} L</span>
                 </span>
               </button>
             </li>
           ))}
           {results.length === 0 && (
-            <li className="rounded-lg border border-dashed border-slate-300 px-3 py-4 text-center text-sm text-slate-500">
-              <SearchX size={18} className="mx-auto mb-1 text-slate-400" />
-              No bus matches “{query}”. Check the code or try the QR scan.
+            <li className="rounded-xl border border-dashed border-slate-300 p-4 text-center text-sm text-slate-500">
+              <SearchX size={20} className="mx-auto mb-1 text-slate-400" />
+              No bus matches “{query}”. Check code or use QR.
             </li>
           )}
         </ul>
@@ -119,20 +125,31 @@ export default function Step1Bus({ draft, patch }: { draft: Draft; patch: (p: Pa
 
       {/* selected bus confirmation */}
       {selected && (
-        <div className="rounded-xl border border-primary-200 bg-primary-50/60 p-4">
-          <p className="text-xs font-semibold uppercase tracking-wide text-primary-700">
-            {draft.busVia === 'qr' ? 'From QR scan' : 'Selected manually'}
-          </p>
-          <p className="mt-1 text-lg font-bold text-navy-900">{selected.busCode}</p>
-          <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5 text-sm">
-            <dt className="text-slate-500">Registration</dt>
-            <dd className="font-medium text-navy-900 tnum">{selected.registration}</dd>
-            <dt className="text-slate-500">Assigned driver</dt>
-            <dd className="font-medium text-navy-900">{selected.driverName}</dd>
-            <dt className="text-slate-500">Tank capacity</dt>
-            <dd className="font-medium text-navy-900 tnum">{selected.tankLitres} L</dd>
-            <dt className="text-slate-500">Fuel type</dt>
-            <dd className="font-medium text-navy-900 capitalize">{selected.fuelType}</dd>
+        <div className="rounded-2xl border-2 border-primary-300 bg-primary-50/70 p-4 shadow-sm">
+          <div className="flex items-center justify-between">
+            <span className="rounded-md bg-primary-100 px-2 py-0.5 text-xs font-bold uppercase tracking-wider text-primary-700">
+              {draft.busVia === 'qr' ? 'Scanned via QR' : 'Selected from fleet'}
+            </span>
+            <span className="text-xs font-semibold text-teal-700">Verified Bus</span>
+          </div>
+          <p className="mt-1 text-2xl font-black text-navy-900">{selected.busCode}</p>
+          <dl className="mt-2.5 grid grid-cols-2 gap-x-3 gap-y-2 rounded-xl bg-white/80 p-3 text-xs">
+            <div>
+              <dt className="text-slate-500">Registration</dt>
+              <dd className="font-bold text-navy-900 tnum">{selected.registration}</dd>
+            </div>
+            <div>
+              <dt className="text-slate-500">Assigned driver</dt>
+              <dd className="font-bold text-navy-900 truncate">{selected.driverName}</dd>
+            </div>
+            <div>
+              <dt className="text-slate-500">Tank capacity</dt>
+              <dd className="font-bold text-navy-900 tnum">{selected.tankLitres} Litres</dd>
+            </div>
+            <div>
+              <dt className="text-slate-500">Fuel type</dt>
+              <dd className="font-bold capitalize text-navy-900">{selected.fuelType}</dd>
+            </div>
           </dl>
           {draft.busChangedFrom && (
             <div className="mt-3">
@@ -143,8 +160,8 @@ export default function Step1Bus({ draft, patch }: { draft: Draft; patch: (p: Pa
           )}
           <button
             onClick={() => patch({ confirmed: true })}
-            className={`mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-lg text-sm font-bold ${
-              draft.confirmed ? 'bg-teal-600 text-white' : 'bg-navy-800 text-white'
+            className={`mt-3 flex h-14 w-full items-center justify-center gap-2 rounded-xl text-base font-bold shadow-md transition-all active:scale-[0.99] ${
+              draft.confirmed ? 'bg-teal-600 text-white' : 'bg-navy-900 text-white'
             }`}
           >
             {draft.confirmed ? 'Bus confirmed ✓' : 'Confirm this bus'}
@@ -178,10 +195,10 @@ export default function Step1Bus({ draft, patch }: { draft: Draft; patch: (p: Pa
                   <button
                     key={b.busCode}
                     onClick={() => selectBus(b, 'qr')}
-                    className="flex w-full items-center justify-between rounded-lg border border-slate-200 px-3 py-2.5 text-sm hover:bg-slate-50"
+                    className="flex min-h-[48px] w-full items-center justify-between rounded-xl border border-slate-200 p-3 text-sm transition-colors active:bg-slate-100"
                   >
-                    <span className="font-semibold text-navy-900">{b.busCode} · {b.registration}</span>
-                    <span className="text-xs text-primary-700 font-semibold">Select</span>
+                    <span className="font-bold text-navy-900">{b.busCode} · {b.registration}</span>
+                    <span className="rounded-md bg-primary-50 px-2 py-1 text-xs font-bold text-primary-700">Select</span>
                   </button>
                 ))}
                 <button onClick={simulateError} className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs font-medium text-slate-500 hover:bg-slate-50">
