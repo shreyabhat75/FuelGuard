@@ -46,6 +46,7 @@ async function main() {
   }
   console.log(`health OK: db=${health.db}, activeUsers=${health.counts.activeUsers}`)
 
+  let adminToken = ''
   for (const [username, expectedRole] of accounts) {
     const login = await json<{ token: string; user: { id: string; role: string } }>(
       await request('/auth/login', {
@@ -57,6 +58,7 @@ async function main() {
     if (!login.token || login.user.role !== expectedRole) {
       throw new Error(`${username}: unexpected login response`)
     }
+    if (username === 'admin') adminToken = login.token
     const headers = { Authorization: `Bearer ${login.token}` }
     const me = await json<{ user: { id: string } }>(await request('/auth/me', { headers }))
     const bootstrap = await json<{ user: { id: string }; entries: unknown[] }>(await request('/bootstrap', { headers }))
@@ -65,6 +67,12 @@ async function main() {
     }
     console.log(`${username} OK: role=${expectedRole}, entries=${bootstrap.entries.length}`)
   }
+
+  const directory = await json<{ users: unknown[] }>(
+    await request('/users', { headers: { Authorization: `Bearer ${adminToken}` } }),
+  )
+  if (directory.users.length < accounts.length) throw new Error('Admin user directory is incomplete')
+  console.log(`admin directory OK: users=${directory.users.length}`)
 
   console.log(`deployment smoke passed: ${accounts.length} accounts`)
 }

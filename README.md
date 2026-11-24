@@ -30,7 +30,7 @@ npm run smoke      # 25 detection-engine + reconciliation smoke checks (exits 0 
 cd server
 npm install
 npm run dev        # boots on http://localhost:4000 — imports all 7 CSVs, seeds demo data
-npm run smoke      # 55 end-to-end API checks on a throwaway database
+npm run smoke      # 67 end-to-end API checks on a throwaway database
 npm run import     # re-run the idempotent CSV import manually
 ```
 
@@ -130,7 +130,7 @@ flowchart TB
 | Auth | JWT (`jsonwebtoken`) + bcryptjs | Secure Bearer tokens & credential hashing |
 | File Storage | multer / PostgreSQL bytea | Evidence uploads (odometer + receipt photos) |
 
-**Testing:** API smoke suite (55 end-to-end checks on a fresh database) + frontend engine
+**Testing:** API smoke suite (67 end-to-end checks on a fresh database) + frontend engine
 smoke (24 checks on rules and reconciliation).
 
 ---
@@ -139,7 +139,7 @@ smoke (24 checks on rules and reconciliation).
 
 | Role | Demo User | Assigned Bus | Tailored Experience & Default Landing |
 |---|---|---|---|
-| **Administrator** | Anand Kumar (`@admin`) | Org-Wide Authority | Centralized authentication & credential governance: provision staff/drivers, generate & reset passwords, edit usernames, suspend/activate accounts, add buses, and allocate drivers (`/app` dispatches `AdminDashboard`) |
+| **Administrator** | System Admin (`@admin`) | Org-Wide Authority | Centralized authentication & credential governance: provision staff/drivers, generate & reset passwords, edit usernames, suspend/activate accounts, add buses, and allocate drivers (`/app` dispatches `AdminDashboard`) |
 | **Driver / Pump User** | Hanumanthappa G (`@driver`) | VB-07 | Mobile-first fuel entry app: 5-step wizard, simulated QR scanner, manual bus search, photo capture (odometer + receipt), GPS status, offline mode with pending-sync badge, transaction history, driver profile (`/driver`) |
 | **Transport Manager** | Ravi S (`@manager`) | Fleet-wide | Operational fleet dashboard: 7 KPI cards, 8 executive sections, spend & consumption trends, dedicated Bus Efficiency Hub (`/app/efficiency`), flag investigation detail with "Awaiting evidence" workflow, bus roster with printable QR codes (`/app`) |
 | **Accountant** | Lakshmi Devi (`@accountant`) | Finance | Financial reconciliation hub: variance KPIs, match category cards, top discrepancy table, statement CSV import, tabbed mismatch filtering, resolution notes (`/app` dispatches `AccountantDashboard`) |

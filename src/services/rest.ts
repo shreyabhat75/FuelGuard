@@ -4,7 +4,7 @@
  * untouched so the app still works fully offline.
  */
 import { store } from './store'
-import type { FuelEntry, PhotoAttachment, Role, User } from '../types'
+import type { Bus, FuelEntry, PhotoAttachment, Role, User } from '../types'
 import type { RuleHit } from '../utils/rules'
 import { RAW } from '../data/raw'
 
@@ -64,6 +64,7 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
     if (res.status === 401 && !path.startsWith('/auth/login')) {
       token = ''
       localStorage.removeItem('ffg_token')
+      store.set((s) => ({ ...s, currentUserId: null }))
     }
     let body: unknown = null
     try {
@@ -85,6 +86,10 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
 
 export function checkApiHealth() {
   return req<{ ok: boolean; db: string; counts: Record<string, number> }>('/health')
+}
+
+export function hasSession(): boolean {
+  return Boolean(token)
 }
 
 /** Evidence URLs need the token inline because they render inside <img> tags. */
@@ -110,12 +115,16 @@ function mapEntry(e: any): FuelEntry {
 export async function fetchBootstrap(): Promise<void> {
   const b = await req<Record<string, unknown>>('/bootstrap')
   const serverUser = b.user as User
+  const serverUsers = (b.users as User[] | undefined) ?? []
   store.set((s) => ({
     ...s,
     currentUserId: serverUser.id ?? s.currentUserId,
-    users: s.users.some((u) => u.id === serverUser.id)
-      ? s.users.map((u) => (u.id === serverUser.id ? { ...u, ...serverUser } : u))
-      : [serverUser, ...s.users],
+    users: serverUsers.length
+      ? serverUsers
+      : s.users.some((u) => u.id === serverUser.id)
+        ? s.users.map((u) => (u.id === serverUser.id ? { ...u, ...serverUser } : u))
+        : [serverUser, ...s.users],
+    buses: (b.buses as Bus[] | undefined) ?? s.buses,
     entries: ((b.entries as unknown[]) ?? []).map(mapEntry),
     flags: (b.flags as never[]) ?? [],
     notes: (b.flagNotes as never[]) ?? [],
@@ -191,6 +200,79 @@ export function logout(): void {
     corrections: [],
     audit: [],
   }))
+}
+
+export async function createUser(input: {
+  name: string
+  role: Role
+  username: string
+  password: string
+  phone?: string
+  busCode?: string
+}): Promise<User> {
+  const result = await req<{ user: User }>('/users', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...input, busCode: input.busCode || null }),
+  })
+  await fetchBootstrap()
+  return result.user
+}
+
+export async function updateUser(input: {
+  userId: string
+  username?: string
+  password?: string
+  status?: 'active' | 'suspended'
+  phone?: string
+  busCode?: string
+  reason: string
+}): Promise<User> {
+  const result = await req<{ user: User }>(`/users/${encodeURIComponent(input.userId)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      username: input.username,
+      password: input.password || undefined,
+      status: input.status,
+      phone: input.phone,
+      busCode: input.busCode === undefined ? undefined : input.busCode || null,
+      reason: input.reason,
+    }),
+  })
+  await fetchBootstrap()
+  return result.user
+}
+
+export async function createBus(input: {
+  busCode: string
+  registration: string
+  tankLitres: number
+  fuelType: 'diesel' | 'petrol' | 'cng'
+  gpsDevice?: string
+  driverId?: string
+}): Promise<Bus> {
+  const result = await req<{ bus: Bus }>('/buses', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...input, driverId: input.driverId || null }),
+  })
+  await fetchBootstrap()
+  return result.bus
+}
+
+export async function allocateBusDriver(input: {
+  busCode: string
+  driverId: string | null
+  reason: string
+}): Promise<Bus> {
+  const result = await req<{ bus: Bus }>(`/buses/${encodeURIComponent(input.busCode)}/driver`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ driverId: input.driverId, reason: input.reason }),
+  })
+  await fetchBootstrap()
+  return result.bus
 }
 
 async function photoToBlob(photo?: PhotoAttachment): Promise<File | null> {

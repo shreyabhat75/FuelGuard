@@ -15,7 +15,7 @@ import {
   serializeReconciliation,
   serializeUser,
 } from '../serializers'
-import { audit, computeReconciliation, entryScope } from '../helpers'
+import { computeReconciliation, entryScope } from '../helpers'
 
 export const miscRouter = Router()
 
@@ -163,11 +163,19 @@ miscRouter.get('/bootstrap', requireAuth, ah(async (req, res) => {
     'SELECT * FROM audit_events ORDER BY created_at DESC, id DESC LIMIT 1000',
   )) as Record<string, unknown>[]
   const me = (await sqlGet<Record<string, unknown>>('SELECT * FROM users WHERE id = ?', [user.id])) as Record<string, unknown>
-
-  await audit('entry', 'bootstrap', 'synced', { id: user.id, name: user.name })
+  const userRows =
+    user.role === 'admin'
+      ? await sqlAll<Record<string, unknown>>("SELECT * FROM users WHERE id <> 'U-SYS' ORDER BY name")
+      : user.role === 'transport_manager'
+        ? await sqlAll<Record<string, unknown>>(
+            "SELECT * FROM users WHERE role = 'driver' OR id = ? ORDER BY name",
+            [user.id],
+          )
+        : []
 
   res.json({
     user: serializeUser(me),
+    users: userRows.map(serializeUser),
     buses: busRows.map(serializeBus),
     entries: await serializeEntries(entryRows),
     flags: await Promise.all(flagRows.map(serializeFlag)),

@@ -10,6 +10,7 @@ import { flagsRouter } from './routes/flags'
 import { approvalsRouter } from './routes/approvals'
 import { statementsRouter } from './routes/statements'
 import { miscRouter } from './routes/misc'
+import { adminRouter } from './routes/admin'
 
 async function boot() {
   console.log('[boot] config:', {
@@ -56,6 +57,7 @@ async function boot() {
   // Protected API surface (single mounts; routers define full sub-paths)
   app.use('/api', entriesRouter)
   app.use('/api', busesRouter)
+  app.use('/api', adminRouter)
   app.use('/api', flagsRouter)
   app.use('/api', approvalsRouter)
   app.use('/api', statementsRouter)

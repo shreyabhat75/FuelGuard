@@ -73,6 +73,7 @@ export default function AdminUsersPage() {
   // Suspend dialog reason
   const [suspendReason, setSuspendReason] = useState('')
   const [suspendBusy, setSuspendBusy] = useState(false)
+  const [suspendError, setSuspendError] = useState('')
 
   // Generate random strong password
   const generatePassword = () => {
@@ -120,7 +121,7 @@ export default function AdminUsersPage() {
   const openEditModal = (u: User) => {
     setEditUser(u)
     setEditUsername(u.username)
-    setEditPassword(u.password || '')
+    setEditPassword('')
     setEditPhone(u.phone || '')
     setEditStatus(u.status || 'active')
     setEditBusCode(u.busCode || '')
@@ -163,8 +164,8 @@ export default function AdminUsersPage() {
         busCode: newRole === 'driver' ? newBusCode : undefined,
       })
       setAddModalOpen(false)
-    } catch {
-      setAddError('Failed to create account. Please try again.')
+    } catch (error) {
+      setAddError(error instanceof Error ? error.message : 'Failed to create account. Please try again.')
     } finally {
       setAddBusy(false)
     }
@@ -188,10 +189,6 @@ export default function AdminUsersPage() {
       setEditError(`Username @${cleanUsername} is already in use.`)
       return
     }
-    if (!editPassword.trim()) {
-      setEditError('Password cannot be empty.')
-      return
-    }
     if (!editReason.trim()) {
       setEditError('Mandatory justification reason required for credential updates.')
       return
@@ -202,15 +199,15 @@ export default function AdminUsersPage() {
       await updateUserCredentials({
         userId: editUser.id,
         username: cleanUsername,
-        password: editPassword,
+        password: editPassword.trim() || undefined,
         status: editStatus,
         phone: editPhone,
         busCode: editUser.role === 'driver' ? editBusCode : undefined,
         reason: editReason,
       })
       setEditUser(null)
-    } catch {
-      setEditError('Failed to update credentials. Try again.')
+    } catch (error) {
+      setEditError(error instanceof Error ? error.message : 'Failed to update credentials. Try again.')
     } finally {
       setEditBusy(false)
     }
@@ -225,6 +222,8 @@ export default function AdminUsersPage() {
       await toggleUserStatus(suspendUser.id, suspendReason)
       setSuspendUser(null)
       setSuspendReason('')
+    } catch (error) {
+      setSuspendError(error instanceof Error ? error.message : 'Failed to update account status.')
     } finally {
       setSuspendBusy(false)
     }
@@ -374,7 +373,7 @@ export default function AdminUsersPage() {
                   <div className="flex items-center gap-1.5 text-xs">
                     <Lock size={12} className="text-slate-400" />
                     <span className="font-mono text-slate-500">
-                      {u.password ? '••••••••' : 'Default password'}
+                      {u.passwordSet || u.password ? 'Password set' : 'Password unavailable'}
                     </span>
                   </div>
                 ),
@@ -432,7 +431,11 @@ export default function AdminUsersPage() {
                       <Button
                         size="sm"
                         variant={u.status === 'suspended' ? 'secondary' : 'ghost'}
-                        onClick={() => setSuspendUser(u)}
+                        onClick={() => {
+                          setSuspendUser(u)
+                          setSuspendReason('')
+                          setSuspendError('')
+                        }}
                       >
                         {u.status === 'suspended' ? 'Reactivate' : 'Suspend'}
                       </Button>
@@ -619,7 +622,7 @@ export default function AdminUsersPage() {
               </Field>
             </div>
 
-            <Field label="Reset / Change Password" htmlFor="edit-password" hint="Set a new password for this user" required>
+            <Field label="Reset / Change Password" htmlFor="edit-password" hint="Leave blank to keep the current password">
               <div className="relative flex items-center">
                 <input
                   id="edit-password"
@@ -627,7 +630,6 @@ export default function AdminUsersPage() {
                   value={editPassword}
                   onChange={(e) => setEditPassword(e.target.value)}
                   className={`${inputCls} pr-24 font-mono`}
-                  required
                 />
                 <div className="absolute right-1 flex items-center gap-1">
                   <button
@@ -702,9 +704,9 @@ export default function AdminUsersPage() {
             {editError && <Banner tone="danger" title={editError} />}
 
             <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
-              <Button type="button" variant="ghost" onClick={copyCredentials}>
+              <Button type="button" variant="ghost" onClick={copyCredentials} disabled={!editPassword}>
                 {copied ? <Check size={14} className="text-teal-600" /> : <Copy size={14} />}
-                {copied ? 'Copied to Clipboard!' : 'Copy Credentials'}
+                {copied ? 'Copied to Clipboard!' : 'Copy New Credentials'}
               </Button>
 
               <div className="flex items-center gap-2">
@@ -745,6 +747,8 @@ export default function AdminUsersPage() {
                 required
               />
             </Field>
+
+            {suspendError && <Banner tone="danger" title={suspendError} />}
 
             <div className="flex items-center justify-end gap-2 pt-2">
               <Button variant="secondary" onClick={() => setSuspendUser(null)}>

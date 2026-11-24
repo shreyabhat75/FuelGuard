@@ -22,7 +22,7 @@ export default function AdminSecurityPage() {
   // Filter security events
   const securityEvents = useMemo(() => {
     return s.audit.filter((ev) => {
-      const isAuth = ev.entityId === 'session' || ev.action === 'viewed'
+      const isAuth = ev.entityId === 'session' || (ev.entityType === 'user' && ev.action === 'viewed')
       const isCreds = ev.entityType === 'user' && ev.action === 'updated'
       const isUser = ev.entityType === 'user' && ev.action === 'created'
       const isBus = ev.entityType === 'bus'
@@ -47,7 +47,9 @@ export default function AdminSecurityPage() {
 
   // Security KPIs
   const totalEvents = s.audit.length
-  const loginEvents = s.audit.filter((ev) => ev.entityId === 'session').length
+  const loginEvents = s.audit.filter(
+    (ev) => ev.entityId === 'session' || (ev.entityType === 'user' && ev.action === 'viewed'),
+  ).length
   const credentialEvents = s.audit.filter((ev) => ev.entityType === 'user' && ev.action === 'updated').length
   const allocationEvents = s.audit.filter((ev) => ev.entityType === 'bus').length
 
@@ -89,7 +91,7 @@ export default function AdminSecurityPage() {
             <Chip tone="teal">Protected</Chip>
           </div>
           <p className="mt-1 text-sm text-slate-500">
-            Immutable organizational protection trail: authentication, password changes, and fleet allocations.
+            Append-only organizational audit trail: authentication, password changes, and fleet allocations.
           </p>
         </div>
 

@@ -109,13 +109,12 @@ export default function AdminBusesPage() {
 
     setAddBusy(true)
     try {
-      const assignedDriver = newDriverId ? drivers.find((d) => d.id === newDriverId) : undefined
       await createBus({
         busCode: code,
         registration: reg,
         tankLitres: capacity,
         fuelType: newFuelType,
-        driverName: assignedDriver ? assignedDriver.name : 'Unassigned',
+        driverId: newDriverId || undefined,
         gpsDevice: newGps || `GPS-${code}`,
       })
       setAddModalOpen(false)
@@ -124,8 +123,8 @@ export default function AdminBusesPage() {
       setNewCapacity('180')
       setNewGps('')
       setNewDriverId('')
-    } catch {
-      setAddError('Failed to create bus. Please try again.')
+    } catch (error) {
+      setAddError(error instanceof Error ? error.message : 'Failed to create bus. Please try again.')
     } finally {
       setAddBusy(false)
     }
@@ -145,8 +144,8 @@ export default function AdminBusesPage() {
         reason: allocateReason.trim() || 'Admin fleet reallocation',
       })
       setAllocateBus(null)
-    } catch {
-      setAllocateError('Failed to allocate driver. Please try again.')
+    } catch (error) {
+      setAllocateError(error instanceof Error ? error.message : 'Failed to allocate driver. Please try again.')
     } finally {
       setAllocateBusy(false)
     }

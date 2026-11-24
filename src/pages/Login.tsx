@@ -154,7 +154,7 @@ export default function Login() {
               Enterprise Fleet Fuel Governance & Anomaly Detection
             </h1>
             <p className="mt-4 text-sm leading-relaxed text-slate-300">
-              Comprehensive platform for bus fleet fuel monitoring, automated pump statement reconciliation, and cryptographic audit security.
+              Comprehensive platform for bus fleet fuel monitoring, automated pump statement reconciliation, and append-only audit controls.
             </p>
 
             <div className="mt-8 space-y-4">
@@ -199,9 +199,9 @@ export default function Login() {
                   <ShieldCheck size={16} />
                 </div>
                 <div>
-                  <div className="text-xs font-semibold text-white">Immutable Audit Logging</div>
+                  <div className="text-xs font-semibold text-white">Append-Only Audit Logging</div>
                   <div className="text-xs text-slate-400">
-                    Every transaction, review note, and credential adjustment is cryptographically recorded.
+                    Every transaction, review note, and credential adjustment is recorded with its actor and timestamp.
                   </div>
                 </div>
               </div>

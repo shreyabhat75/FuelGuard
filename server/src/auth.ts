@@ -58,9 +58,11 @@ export const loginHandler = ah(async (req: Request, res: Response): Promise<void
     return
   }
   const user: AuthUser = { id: row.id, username: row.username, name: row.name, role: row.role, busCode: row.bus_code }
+  const loginAt = nowIso()
+  await sqlRun('UPDATE users SET last_login = ? WHERE id = ?', [loginAt, user.id])
   await sqlRun(
-    "INSERT INTO audit_events (entity_type, entity_id, action, actor_id, actor_name, created_at) VALUES ('entry','login','viewed',?,?,?)",
-    [user.id, user.name, nowIso()],
+    "INSERT INTO audit_events (entity_type, entity_id, action, actor_id, actor_name, created_at) VALUES ('user',?,'viewed',?,?,?)",
+    [user.id, user.id, user.name, loginAt],
   )
   res.json({ token: signToken(user), user })
 })

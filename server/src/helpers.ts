@@ -9,10 +9,10 @@ import { loadStatementLines } from './serializers'
 export type AuditAction =
   | 'created' | 'viewed' | 'status_changed' | 'note_added' | 'correction_proposed'
   | 'escalated' | 'approved' | 'rejected' | 'info_requested' | 'synced'
-  | 'bus_lookup' | 'bus_changed' | 'reconciliation_reviewed' | 'statement_loaded'
+  | 'bus_lookup' | 'bus_changed' | 'reconciliation_reviewed' | 'statement_loaded' | 'updated'
 
 export async function audit(
-  entityType: 'entry' | 'flag' | 'approval' | 'bus' | 'reconciliation' | 'statement' | 'evidence',
+  entityType: 'entry' | 'flag' | 'approval' | 'bus' | 'reconciliation' | 'statement' | 'evidence' | 'user',
   entityId: string,
   action: AuditAction,
   actor: { id: string | null; name: string },

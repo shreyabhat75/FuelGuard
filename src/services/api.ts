@@ -540,6 +540,12 @@ export async function createUser(data: {
   phone?: string
   busCode?: string
 }): Promise<User> {
+  if (API_MODE) {
+    return rest.createUser({
+      ...data,
+      password: data.password?.trim() || 'demo123',
+    })
+  }
   await wait(300)
   const newUser: User = {
     id: `U-${Date.now().toString(36).toUpperCase()}`,
@@ -589,6 +595,10 @@ export async function updateUserCredentials(data: {
   busCode?: string
   reason: string
 }): Promise<void> {
+  if (API_MODE) {
+    await rest.updateUser(data)
+    return
+  }
   await wait(300)
   store.set((s) => {
     const existing = s.users.find((u) => u.id === data.userId)
@@ -643,6 +653,16 @@ export async function updateUserCredentials(data: {
 }
 
 export async function toggleUserStatus(userId: string, reason: string): Promise<void> {
+  if (API_MODE) {
+    const existing = store.get().users.find((u) => u.id === userId)
+    if (!existing) throw new Error('User not found')
+    await rest.updateUser({
+      userId,
+      status: existing.status === 'suspended' ? 'active' : 'suspended',
+      reason,
+    })
+    return
+  }
   await wait(200)
   store.set((s) => {
     const existing = s.users.find((u) => u.id === userId)
@@ -670,8 +690,10 @@ export async function createBus(data: {
   tankLitres: number
   fuelType: 'diesel' | 'petrol' | 'cng'
   driverName?: string
+  driverId?: string
   gpsDevice?: string
 }): Promise<Bus> {
+  if (API_MODE) return rest.createBus(data)
   await wait(300)
   const code = data.busCode.trim().toUpperCase()
   const newBus: Bus = {
@@ -715,6 +737,13 @@ export async function allocateBusDriver(data: {
   driverId: string | null
   reason?: string
 }): Promise<void> {
+  if (API_MODE) {
+    await rest.allocateBusDriver({
+      ...data,
+      reason: data.reason?.trim() || 'Fleet reallocation',
+    })
+    return
+  }
   await wait(250)
   store.set((s) => {
     const targetBus = s.buses.find((b) => b.busCode === data.busCode)

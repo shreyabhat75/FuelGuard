@@ -243,4 +243,41 @@ CREATE TABLE places (
 ALTER TABLE evidence ADD COLUMN content ${BINARY(d)};
 `,
   },
+  {
+    version: 3,
+    name: 'admin-management',
+    sql: (d: Dialect) =>
+      d === 'postgres'
+        ? `
+ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login TEXT;
+ALTER TABLE audit_events DROP CONSTRAINT IF EXISTS audit_events_entity_type_check;
+ALTER TABLE audit_events ADD CONSTRAINT audit_events_entity_type_check
+  CHECK (entity_type IN ('entry','flag','approval','bus','reconciliation','statement','evidence','user'));
+`
+        : `
+ALTER TABLE users ADD COLUMN phone TEXT;
+ALTER TABLE users ADD COLUMN last_login TEXT;
+
+ALTER TABLE audit_events RENAME TO audit_events_v2;
+CREATE TABLE audit_events (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  entity_type TEXT NOT NULL CHECK (entity_type IN
+    ('entry','flag','approval','bus','reconciliation','statement','evidence','user')),
+  entity_id   TEXT NOT NULL,
+  action      TEXT NOT NULL,
+  before      TEXT,
+  after       TEXT,
+  reason      TEXT,
+  actor_id    TEXT REFERENCES users(id),
+  actor_name  TEXT NOT NULL,
+  created_at  TEXT NOT NULL
+);
+INSERT INTO audit_events (id, entity_type, entity_id, action, before, after, reason, actor_id, actor_name, created_at)
+SELECT id, entity_type, entity_id, action, before, after, reason, actor_id, actor_name, created_at
+FROM audit_events_v2;
+DROP TABLE audit_events_v2;
+CREATE INDEX idx_audit_entity ON audit_events (entity_type, entity_id);
+`,
+  },
 ]

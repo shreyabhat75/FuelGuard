@@ -2,7 +2,7 @@ import React from 'react'
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { OfficeLayout, DriverLayout } from './components/layouts'
 import { currentUser } from './services/api'
-import { API_MODE, restoreSession } from './services/rest'
+import { API_MODE, fetchBootstrap, hasSession, restoreSession } from './services/rest'
 import { useAppState } from './services/store'
 import type { Role } from './types'
 import Login from './pages/Login'
@@ -83,7 +83,17 @@ function RootRedirect() {
 
 export default function App() {
   React.useEffect(() => {
-    if (API_MODE) void restoreSession()
+    if (!API_MODE) return
+    void restoreSession()
+    const refresh = () => {
+      if (hasSession() && !document.hidden) void fetchBootstrap().catch(() => undefined)
+    }
+    const timer = window.setInterval(refresh, 30_000)
+    window.addEventListener('focus', refresh)
+    return () => {
+      window.clearInterval(timer)
+      window.removeEventListener('focus', refresh)
+    }
   }, [])
 
   return (
@@ -166,7 +176,7 @@ export default function App() {
           <Route
             path="admin/buses"
             element={
-              <Guard allow={['admin', 'transport_manager']}>
+              <Guard allow={['admin']}>
                 <AdminBusesPage />
               </Guard>
             }
