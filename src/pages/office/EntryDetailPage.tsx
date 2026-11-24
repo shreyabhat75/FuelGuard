@@ -59,7 +59,7 @@ export default function EntryDetailPage() {
     )
   }
 
-  const isManager = user?.role === 'transport_manager'
+  const isManager = user?.role === 'transport_manager' || user?.role === 'admin'
   const isDriver = user?.role === 'driver'
 
   const submitCorrection = () => {

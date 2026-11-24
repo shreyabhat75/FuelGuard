@@ -1,5 +1,5 @@
 /**
- * End-to-end API smoke test for Person 2 deliverables.
+ * End-to-end API smoke test.
  * Boots a throwaway server instance (fresh SQLite DB) and exercises:
  * auth + RBAC, fuel entry creation with detection rules, offline-sync
  * idempotency, private evidence upload/serve, statement import + reconciliation,
@@ -103,6 +103,7 @@ async function main() {
     const health = await http('GET', '/health')
     ok('health is public', health.status === 200 && health.body.ok === true)
     const seededCounts = health.body.counts
+    ok('all five demo accounts are active', seededCounts.activeUsers === 5, JSON.stringify(seededCounts))
     ok(
       'historical data seeded (112 entries / 82 statement lines / 9 flags)',
       seededCounts.entries === 112 && seededCounts.statementLines === 82 && seededCounts.flags === 9,
@@ -125,6 +126,8 @@ async function main() {
       ok(`login ${label}`, r.status === 200 && r.body.token && r.body.user?.role, JSON.stringify(r.body).slice(0, 120))
       tokens[label] = r.body.token
     }
+    const me = await http('GET', '/auth/me', { token: tokens.driver })
+    ok('auth/me returns the token user', me.status === 200 && me.body.user?.username === 'driver')
 
     console.log('2. Role scoping')
     const driverBuses = await http('GET', '/buses', { token: tokens.driver })

@@ -17,6 +17,7 @@ export const users: User[] = [
   { id: 'U-TM', name: 'Ravi S', role: 'transport_manager', username: 'manager' },
   { id: 'U-ACC', name: 'Lakshmi Devi', role: 'accountant', username: 'accountant' },
   { id: 'U-PRIN', name: 'Dr. Suresh Rao', role: 'principal', username: 'principal' },
+  { id: 'U-ADMIN', name: 'System Admin', role: 'admin', username: 'admin' },
 ]
 
 /** Investigation cases seeded from findings.csv (synthetic ArtIntele dataset). */
@@ -88,7 +89,7 @@ export const seededFlags: Flag[] = [
     createdAt: '2026-10-25T09:10:00+05:30',
     relatedBillNos: ['SLF/72152'],
     figures: [
-      { label: 'Roster size', value: '8 buses (KA 99 VB 1001–1008)' },
+      { label: 'Roster size', value: '8 buses (KA 99 VB 1001â€“1008)' },
       { label: 'Billed vehicle', value: 'KA 99 MX 4417', highlight: true },
       { label: 'Roster match', value: 'None', highlight: true },
     ],
@@ -112,7 +113,7 @@ export const seededFlags: Flag[] = [
     createdAt: '2026-10-25T09:15:00+05:30',
     relatedBillNos: ['SLF/72169'],
     figures: [
-      { label: 'GPS pings for VB-03 that day', value: '3 — all near the depot', highlight: true },
+      { label: 'GPS pings for VB-03 that day', value: '3 â€” all near the depot', highlight: true },
       { label: 'Register entries for VB-03 that day', value: '0', highlight: true },
     ],
   },
@@ -180,10 +181,10 @@ export const seededFlags: Flag[] = [
     status: 'needs_review',
     confidence: 'Medium confidence; cannot be verified from available data.',
     figures: [
-      { label: 'College calendar', value: '02-10-2026 — Gandhi Jayanti (holiday)', highlight: true },
+      { label: 'College calendar', value: '02-10-2026 â€” Gandhi Jayanti (holiday)', highlight: true },
       { label: 'Odometer since previous fill', value: '+97 km', highlight: true },
-      { label: 'GPS path since previous fill', value: '˜172.7 km', highlight: true },
-      { label: 'Unexplained gap', value: '˜75.7 km', highlight: true },
+      { label: 'GPS path since previous fill', value: 'â‰ˆ172.7 km', highlight: true },
+      { label: 'Unexplained gap', value: 'â‰ˆ75.7 km', highlight: true },
     ],
     createdAt: '2026-10-25T09:30:00+05:30',
   },
@@ -192,7 +193,7 @@ export const seededFlags: Flag[] = [
     figures: [
       { label: 'Hours between fills', value: '8.1 h' },
       { label: 'Odometer between fills', value: '+41 km', highlight: true },
-      { label: 'Typical daily distance (fleet)', value: '˜100–200 km' },
+      { label: 'Typical daily distance (fleet)', value: 'â‰ˆ100â€“200 km' },
     ],
     caseTitle: 'VB-02 â€” unusual same-day refill pattern',
     ruleCode: 'SHORT_INTERVAL',

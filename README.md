@@ -30,7 +30,7 @@ npm run smoke      # 25 detection-engine + reconciliation smoke checks (exits 0 
 cd server
 npm install
 npm run dev        # boots on http://localhost:4000 — imports all 7 CSVs, seeds demo data
-npm run smoke      # 53 end-to-end API checks on a throwaway database
+npm run smoke      # 55 end-to-end API checks on a throwaway database
 npm run import     # re-run the idempotent CSV import manually
 ```
 
@@ -129,6 +129,9 @@ flowchart TB
 | Database | PostgreSQL (primary) / SQLite (fallback) | 16-table relational schema with automatic fallback |
 | Auth | JWT (`jsonwebtoken`) + bcryptjs | Secure Bearer tokens & credential hashing |
 | File Storage | multer / PostgreSQL bytea | Evidence uploads (odometer + receipt photos) |
+
+**Testing:** API smoke suite (55 end-to-end checks on a fresh database) + frontend engine
+smoke (24 checks on rules and reconciliation).
 
 ---
 

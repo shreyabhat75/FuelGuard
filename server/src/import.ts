@@ -68,7 +68,13 @@ export async function seedUsers(): Promise<void> {
       await sqlRun(
         `INSERT INTO users (id, username, name, role, bus_code, password_hash, active, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-         ON CONFLICT (id) DO NOTHING`,
+         ON CONFLICT (id) DO UPDATE SET
+           username = excluded.username,
+           name = excluded.name,
+           role = excluded.role,
+           bus_code = excluded.bus_code,
+           password_hash = excluded.password_hash,
+           active = excluded.active`,
         [id, username, name, role, bus_code, password_hash, active, now],
       )
     }

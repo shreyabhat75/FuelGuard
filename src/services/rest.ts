@@ -33,26 +33,58 @@ const DEMO_USERNAMES: Record<string, string> = {
   'U-PRIN': 'principal',
 }
 
+const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms))
+
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_URL}${path}`, {
-    ...init,
-    headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(init?.headers ?? {}) },
-  })
-  if (res.status === 401 && !path.startsWith('/auth/login')) {
-    token = ''
-    localStorage.removeItem('ffg_token')
+  const method = (init?.method ?? 'GET').toUpperCase()
+  const canRetry = method === 'GET' || method === 'HEAD' || path === '/auth/login'
+  const attempts = canRetry ? 6 : 1
+  let lastError: Error | undefined
+
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    let res: Response
+    try {
+      res = await fetch(`${API_URL}${path}`, {
+        ...init,
+        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(init?.headers ?? {}) },
+      })
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error('Unable to reach the API')
+      if (attempt + 1 < attempts) {
+        await sleep(1000 * (attempt + 1))
+        continue
+      }
+      throw lastError
+    }
+
+    if ([502, 503, 504].includes(res.status) && attempt + 1 < attempts) {
+      await sleep(1200 * (attempt + 1))
+      continue
+    }
+    if (res.status === 401 && !path.startsWith('/auth/login')) {
+      token = ''
+      localStorage.removeItem('ffg_token')
+    }
+    let body: unknown = null
+    try {
+      body = await res.json()
+    } catch {
+      body = null
+    }
+    if (!res.ok) {
+      const fallback = [502, 503, 504].includes(res.status)
+        ? 'The API is waking up. Wait a few seconds and try again.'
+        : `Request failed (${res.status})`
+      throw new Error((body as { error?: string } | null)?.error ?? fallback)
+    }
+    return body as T
   }
-  let body: unknown = null
-  try {
-    body = await res.json()
-  } catch {
-    body = null
-  }
-  if (!res.ok) {
-    const message = (body as { error?: string } | null)?.error ?? `Request failed (${res.status})`
-    throw new Error(message)
-  }
-  return body as T
+
+  throw lastError ?? new Error('Unable to reach the API')
+}
+
+export function checkApiHealth() {
+  return req<{ ok: boolean; db: string; counts: Record<string, number> }>('/health')
 }
 
 /** Evidence URLs need the token inline because they render inside <img> tags. */
@@ -77,9 +109,13 @@ function mapEntry(e: any): FuelEntry {
 /** Replaces the data slices of the store with a fresh server snapshot. */
 export async function fetchBootstrap(): Promise<void> {
   const b = await req<Record<string, unknown>>('/bootstrap')
+  const serverUser = b.user as User
   store.set((s) => ({
     ...s,
-    currentUserId: (b.user as { id: string }).id ?? s.currentUserId,
+    currentUserId: serverUser.id ?? s.currentUserId,
+    users: s.users.some((u) => u.id === serverUser.id)
+      ? s.users.map((u) => (u.id === serverUser.id ? { ...u, ...serverUser } : u))
+      : [serverUser, ...s.users],
     entries: ((b.entries as unknown[]) ?? []).map(mapEntry),
     flags: (b.flags as never[]) ?? [],
     notes: (b.flagNotes as never[]) ?? [],
@@ -92,16 +128,21 @@ export async function fetchBootstrap(): Promise<void> {
   }))
 }
 
-export async function login(userId: string): Promise<void> {
-  const username = DEMO_USERNAMES[userId] ?? userId
-  const r = await req<{ token: string }>('/auth/login', {
+export async function login(
+  userId: string,
+  credentials?: { username: string; password: string },
+): Promise<User> {
+  const username = credentials?.username.trim() || DEMO_USERNAMES[userId] || userId
+  const password = credentials?.password || 'demo123'
+  const r = await req<{ token: string; user: User }>('/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username, password: 'demo123' }),
+    body: JSON.stringify({ username, password }),
   })
   token = r.token
   localStorage.setItem('ffg_token', token)
   await fetchBootstrap()
+  return r.user
 }
 
 export async function loginWithCredentials(username: string, password: string): Promise<User> {

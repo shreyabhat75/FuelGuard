@@ -1,4 +1,4 @@
-# FleetFuel Guard — Backend API (Person 2)
+# FleetFuel Guard — Backend API
 
 Base URL: `http://localhost:4000/api` · JSON over HTTP · Auth: `Authorization: Bearer <JWT>`
 JWTs are returned by `POST /auth/login` and expire after `TOKEN_TTL_HOURS` (default 12 h).
@@ -94,7 +94,9 @@ Framing rule enforced in data: flags carry `reason` + `plain_explanation`; no fi
   pump_statement_files, pump_statement_lines, flags, flag_notes, approvals, corrections,
   audit_events, reconciliation_results, diesel_prices, college_calendar, places`.
 - `npm run import` (also runs automatically at boot): idempotent import of all seven CSVs — 8 buses, 112 register entries, 82 statement lines, 54,522 GPS pings, prices/calendar/places — plus seed of users, the 9 investigation cases from findings, 3 seeded approvals (submitted by the manager), reviewer decisions and audit history. Re-running never duplicates.
-- Evidence files live in `server/uploads/` (private) and are served only through `GET /evidence/:id/file` with a valid token.
+- New evidence files are stored in PostgreSQL/SQLite (migration v2), so they survive ephemeral
+  host restarts. Legacy local files remain readable from `server/uploads/`. All files are served
+  only through `GET /evidence/:id/file` with a valid token.
 
 ## Configuration
 
@@ -106,7 +108,8 @@ Copy `server/.env.example` → `server/.env`. All values have safe defaults; **s
 cd server
 npm install
 npm run dev        # tsx watch on :4000 (import + seed on boot)
-npm run smoke      # 53 end-to-end checks on a throwaway DB (:4010)
+npm run smoke      # 55 end-to-end checks on a throwaway DB (:4010)
+npm run smoke:deployment  # health + all five accounts against API_URL
 npm run build      # esbuild bundle → dist/server.cjs
 ```
 

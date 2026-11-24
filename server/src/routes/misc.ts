@@ -22,6 +22,7 @@ export const miscRouter = Router()
 /** GET /api/health — public liveness probe. */
 miscRouter.get('/health', ah(async (_req, res) => {
   const counts = {
+    activeUsers: Number((await sqlGet<{ n: number }>('SELECT COUNT(*) AS n FROM users WHERE active = 1'))!.n),
     buses: Number((await sqlGet<{ n: number }>('SELECT COUNT(*) AS n FROM buses'))!.n),
     entries: Number((await sqlGet<{ n: number }>('SELECT COUNT(*) AS n FROM fuel_entries'))!.n),
     statementLines: Number((await sqlGet<{ n: number }>('SELECT COUNT(*) AS n FROM pump_statement_lines'))!.n),

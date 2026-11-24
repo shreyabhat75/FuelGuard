@@ -24,6 +24,7 @@ import {
 import { fmtDateTime, inr } from '../../utils/format'
 import { currentUser } from '../../services/api'
 import type { Approval } from '../../types'
+import { API_MODE } from '../../services/rest'
 
 export default function ApprovalsPage() {
   const s = useAppState()
@@ -251,8 +252,8 @@ export default function ApprovalsPage() {
         </Card>
       )}
 
-      {/* Escalate shortcut for testing convenience */}
-      {user?.role === 'principal' && s.flags.some((f) => f.status === 'needs_review' && !s.approvals.some((a) => a.targetId === f.id && a.decision === 'pending')) && (
+      {/* Mock-only convenience; API mode uses the manager escalation workflow. */}
+      {!API_MODE && user?.role === 'principal' && s.flags.some((f) => f.status === 'needs_review' && !s.approvals.some((a) => a.targetId === f.id && a.decision === 'pending')) && (
         <Card>
           <CardHeader
             title="Flagged Cases Awaiting Principal Queue"

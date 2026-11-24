@@ -3,7 +3,7 @@ import cors from 'cors'
 import { env } from './env'
 import { connectDb, migrate } from './db'
 import { runImport } from './import'
-import { loginHandler } from './auth'
+import { loginHandler, meHandler, requireAuth } from './auth'
 import { entriesRouter } from './routes/entries'
 import { busesRouter } from './routes/buses'
 import { flagsRouter } from './routes/flags'
@@ -12,6 +12,11 @@ import { statementsRouter } from './routes/statements'
 import { miscRouter } from './routes/misc'
 
 async function boot() {
+  console.log('[boot] config:', {
+    nodeEnv: env.nodeEnv,
+    dbDriver: env.dbDriver,
+    corsOrigins: env.corsOrigins,
+  })
   await connectDb()
   await migrate()
   const report = await runImport()
@@ -23,12 +28,8 @@ async function boot() {
     cors({
       origin: (requestOrigin, callback) => {
         if (!requestOrigin) return callback(null, true)
-        const allowed =
-          env.corsOrigins.includes(requestOrigin) ||
-          requestOrigin.endsWith('.onrender.com') ||
-          requestOrigin.includes('localhost')
-        if (allowed) return callback(null, true)
-        return callback(null, true) // Allow all for evaluation/demo
+        const allowed = env.corsOrigins === '*' || env.corsOrigins.includes(requestOrigin)
+        return callback(null, allowed)
       },
       credentials: false,
     }),
@@ -37,6 +38,7 @@ async function boot() {
 
   // Public
   app.post('/api/auth/login', loginHandler)
+  app.get('/api/auth/me', requireAuth, meHandler)
 
   // Promote ?token= to the Authorization header for evidence file URLs only
   // (they render inside <img> tags, which cannot send headers).

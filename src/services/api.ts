@@ -76,8 +76,8 @@ export async function authenticate(username: string, password: string): Promise<
   }
 
   // Check password
-  const validPassword = user.password || 'demo'
-  if (password !== validPassword && password !== 'demo' && password !== 'demo123') {
+  const validPassword = user.password || 'demo123'
+  if (password !== validPassword) {
     throw new Error('Invalid username or password. Please verify your credentials.')
   }
 
@@ -101,12 +101,15 @@ export async function authenticate(username: string, password: string): Promise<
 export async function login(userId: string) {
   if (API_MODE) return rest.login(userId)
   await wait(450)
+  const user = store.get().users.find((u) => u.id === userId)
+  if (!user) throw new Error('Unknown demo user')
   store.set((s) => ({ ...addAudit(s, {
     entityType: 'entry',
     entityId: 'session',
     action: 'viewed',
-    after: `Sign-in as ${s.users.find((u) => u.id === userId)?.name}`,
+    after: `Sign-in as ${user.name}`,
   }), currentUserId: userId }))
+  return user
 }
 
 export function logout() {
