@@ -124,9 +124,11 @@ miscRouter.get('/bootstrap', requireAuth, ah(async (req, res) => {
       ? ((await sqlAll<Record<string, unknown>>('SELECT * FROM buses WHERE bus_code = ?', [user.busCode])) as Record<string, unknown>[])
       : ((await sqlAll<Record<string, unknown>>('SELECT * FROM buses ORDER BY bus_code')) as Record<string, unknown>[])
   const { where, params } = entryScope(user)
+  // Limit bootstrap snapshot to the 200 most recent entries; the full paginated
+  // list at GET /api/fuel-entries is used for deeper views.
   const entryRows = (await sqlAll<Record<string, unknown>>(
     `SELECT e.*, u.name AS created_name FROM fuel_entries e LEFT JOIN users u ON u.id = e.created_by ${where}
-     ORDER BY e.ts_client DESC`,
+     ORDER BY e.ts_client DESC LIMIT 200`,
     params,
   )) as Record<string, unknown>[]
 

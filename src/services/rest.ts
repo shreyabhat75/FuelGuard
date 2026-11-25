@@ -10,6 +10,16 @@ import { RAW } from '../data/raw'
 
 export const API_MODE = import.meta.env.VITE_API_MODE === 'rest'
 
+/** Debounce helper so rapid successive actions fire only one /bootstrap call. */
+let _bootstrapTimer: ReturnType<typeof setTimeout> | null = null
+function scheduleBootstrap(): void {
+  if (_bootstrapTimer) clearTimeout(_bootstrapTimer)
+  _bootstrapTimer = setTimeout(() => {
+    _bootstrapTimer = null
+    fetchBootstrap().catch(() => undefined)
+  }, 800)
+}
+
 function apiUrl(value?: string): string {
   let raw = (value?.trim() || (import.meta.env.PROD ? 'https://fleetfuel-guard-api.onrender.com/api' : 'http://localhost:4000/api')).replace(/\/+$/, '')
   // If Render or cloud hosting passed an internal bare service name without a domain (e.g. "fleetfuel-guard-api"):
@@ -247,7 +257,7 @@ export async function setFlagStatus(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ status, reason }),
   })
-  await fetchBootstrap()
+  scheduleBootstrap()
 }
 
 export async function addFlagNote(flagId: string, text: string): Promise<void> {
@@ -256,7 +266,7 @@ export async function addFlagNote(flagId: string, text: string): Promise<void> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ text }),
   })
-  await fetchBootstrap()
+  scheduleBootstrap()
 }
 
 export function markFlagViewed(flagId: string): void {
@@ -274,7 +284,7 @@ export async function proposeCorrection(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ field, proposedValue, reason }),
   })
-  await fetchBootstrap()
+  scheduleBootstrap()
 }
 
 export async function decideApproval(
@@ -287,7 +297,7 @@ export async function decideApproval(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ decision, reason }),
   })
-  await fetchBootstrap()
+  scheduleBootstrap()
 }
 
 export async function createApprovalForFlag(flagId: string, note: string): Promise<void> {
@@ -296,7 +306,7 @@ export async function createApprovalForFlag(flagId: string, note: string): Promi
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ flagId, reviewNotes: note }),
   })
-  await fetchBootstrap()
+  scheduleBootstrap()
 }
 
 /** Sends the bundled demo statement to the real import endpoint. */
@@ -320,5 +330,5 @@ export async function reviewReconciliation(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ billNo, decision, note }),
   })
-  await fetchBootstrap()
+  scheduleBootstrap()
 }

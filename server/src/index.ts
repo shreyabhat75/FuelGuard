@@ -28,7 +28,8 @@ async function boot() {
           requestOrigin.endsWith('.onrender.com') ||
           requestOrigin.includes('localhost')
         if (allowed) return callback(null, true)
-        return callback(null, true) // Allow all for evaluation/demo
+        console.warn('[cors] blocked unknown origin:', requestOrigin)
+        return callback(null, false)
       },
       credentials: false,
     }),
