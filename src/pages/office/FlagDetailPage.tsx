@@ -115,7 +115,7 @@ export default function FlagDetailPage() {
     )
   }
 
-  const isManager = user?.role === 'transport_manager'
+  const isManager = user?.role === 'transport_manager' || user?.role === 'admin'
   const bus = buses.find((b) => b.busCode === flag.busCode)
 
   const doAction = (kind: 'under_review' | 'resolved' | 'escalated' | 'awaiting_evidence') => {

@@ -31,6 +31,14 @@ export function serializeUser(u: Row) {
   }
   const busCode = s(u.bus_code)
   if (busCode) out.busCode = busCode
+  if (u.active != null) out.status = n(u.active) ? 'active' : 'suspended'
+  const phone = s(u.phone)
+  if (phone) out.phone = phone
+  const createdAt = s(u.created_at)
+  if (createdAt) out.createdAt = createdAt
+  const lastLogin = s(u.last_login)
+  if (lastLogin) out.lastLogin = lastLogin
+  if (u.password_hash != null) out.passwordSet = Boolean(s(u.password_hash))
   return out
 }
 

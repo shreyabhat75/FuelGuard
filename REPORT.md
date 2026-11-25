@@ -107,7 +107,7 @@ audit), the rule engine, the EN/ಕನ್ನಡ toggle and the demo dataset mapp
 - **Deployment configuration.** Environment variables (`PORT, JWT_SECRET, DATABASE_URL, DB_DRIVER, DB_PATH, UPLOAD_DIR,
   DATA_DIR, CORS_ORIGIN, TOKEN_TTL_HOURS`) with safe defaults, CORS allow-list, public health
   endpoint, automatic import + seed on boot, `.env.example`, and secrets kept out of git.
-- **Testing.** An end-to-end API smoke suite (`npm run smoke`, 53 checks, all passing) that boots
+- **Testing.** An end-to-end API smoke suite (`npm run smoke`, 67 checks, all passing) that boots
   a throwaway server on a fresh database and verifies: auth, role scoping, entry creation with
   rules, idempotent replay, private evidence serving, RBAC denials, reconciliation categories,
   seeded reviewer decisions, statement re-import idempotency, flag review → escalation →
@@ -180,7 +180,7 @@ working login → bus list → create-entry endpoints before office screens were
 | Database | PostgreSQL at `localhost:5433` (`DATABASE_URL`); SQLite file fallback (`server/data/fleetfuel.db`, gitignored) |
 | Migrations | versioned in-code (pg `_migrations` table / SQLite `user_version` pragma), applied automatically on boot |
 | Source data | 7 supplied CSVs → idempotent import on first boot |
-| Tests | API smoke suite (53 checks) + frontend engine smoke (24 checks), both plain scripts |
+| Tests | API smoke suite (67 checks) + frontend engine smoke (24 checks), both plain scripts |
 | Version control | Git / GitHub (`main` + `backend` branches) |
 | Config | `.env` via `.env.example` (`PORT, JWT_SECRET, DATABASE_URL, DB_DRIVER, DB_PATH, UPLOAD_DIR, DATA_DIR, CORS_ORIGIN, TOKEN_TTL_HOURS`) |
 | Deployment target | any Node host (env-configured `PORT`/`CORS_ORIGIN`/`TOKEN_TTL_HOURS`; production bundle via `npm start`); frontend static build |
@@ -406,7 +406,7 @@ are asserted by both the engine smoke test and the API smoke test.
 | Suite | Command | Result |
 | --- | --- | --- |
 | Engine smoke (frontend rules + reconciliation) | `npm run smoke` | 24/24 checks; categories {matched 75, rate 3, amount 1, unmatched 1, register-missing 1, duplicate 1} |
-| **API smoke (backend end-to-end, fresh DB)** | `cd server && npm run smoke` | **53/53** — auth, scoping, entry+rules, idempotent replay, evidence privacy, RBAC denials, reconciliation, maker-checker, corrections, GPS path, audit |
+| **API smoke (backend end-to-end, fresh DB)** | `cd server && npm run smoke` | **67/67** — auth, auth/me, admin user/bus persistence, account suspension, password reset, transactional allocation, scoping, entry+rules, evidence privacy, reconciliation, maker-checker, corrections, GPS path, audit |
 | Type-check + production build | `npx tsc -b && npm run build` (both apps) | clean |
 | Import idempotency | `npm run import` (twice) | totals unchanged (8/112/82/54,522) — verified on PostgreSQL |
 | PostgreSQL switchover | server + full API verify on PG | 15/15 checks on live PG (auth, scoping, save+rules, evidence, replay-dedupe, reconciliation decision, maker-checker, GPS path, dashboard); SQLite fallback verified with dead `DATABASE_URL` |

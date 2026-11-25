@@ -8,6 +8,7 @@ export interface User {
   busCode?: string
   username: string
   password?: string
+  passwordSet?: boolean
   status?: 'active' | 'suspended'
   phone?: string
   createdAt?: string

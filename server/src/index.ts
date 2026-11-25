@@ -3,15 +3,21 @@ import cors from 'cors'
 import { env } from './env'
 import { connectDb, migrate } from './db'
 import { runImport } from './import'
-import { loginHandler } from './auth'
+import { loginHandler, meHandler, requireAuth } from './auth'
 import { entriesRouter } from './routes/entries'
 import { busesRouter } from './routes/buses'
 import { flagsRouter } from './routes/flags'
 import { approvalsRouter } from './routes/approvals'
 import { statementsRouter } from './routes/statements'
 import { miscRouter } from './routes/misc'
+import { adminRouter } from './routes/admin'
 
 async function boot() {
+  console.log('[boot] config:', {
+    nodeEnv: env.nodeEnv,
+    dbDriver: env.dbDriver,
+    corsOrigins: env.corsOrigins,
+  })
   await connectDb()
   await migrate()
   const report = await runImport()
@@ -23,6 +29,9 @@ async function boot() {
     cors({
       origin: (requestOrigin, callback) => {
         if (!requestOrigin) return callback(null, true)
+        // Wildcard mode (CORS_ORIGIN=*) allows all origins — useful for local dev.
+        // In production only named origins + *.onrender.com + localhost are allowed.
+        if (env.corsOrigins === '*') return callback(null, true)
         const allowed =
           env.corsOrigins.includes(requestOrigin) ||
           requestOrigin.endsWith('.onrender.com') ||
@@ -38,6 +47,7 @@ async function boot() {
 
   // Public
   app.post('/api/auth/login', loginHandler)
+  app.get('/api/auth/me', requireAuth, meHandler)
 
   // Promote ?token= to the Authorization header for evidence file URLs only
   // (they render inside <img> tags, which cannot send headers).
@@ -55,6 +65,7 @@ async function boot() {
   // Protected API surface (single mounts; routers define full sub-paths)
   app.use('/api', entriesRouter)
   app.use('/api', busesRouter)
+  app.use('/api', adminRouter)
   app.use('/api', flagsRouter)
   app.use('/api', approvalsRouter)
   app.use('/api', statementsRouter)

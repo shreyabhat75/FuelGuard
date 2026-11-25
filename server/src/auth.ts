@@ -36,6 +36,7 @@ export const loginHandler = ah(async (req: Request, res: Response): Promise<void
     res.status(400).json({ error: 'username and password are required' })
     return
   }
+  const normalizedUsername = String(username).trim().toLowerCase()
   const row = await sqlGet<{
     id: string
     username: string
@@ -45,7 +46,7 @@ export const loginHandler = ah(async (req: Request, res: Response): Promise<void
     password_hash: string
     active: number
   }>('SELECT id, username, name, role, bus_code, password_hash, active FROM users WHERE username = ?', [
-    String(username),
+    normalizedUsername,
   ])
 
   if (!row || !bcrypt.compareSync(String(password), row.password_hash)) {
@@ -57,12 +58,18 @@ export const loginHandler = ah(async (req: Request, res: Response): Promise<void
     return
   }
   const user: AuthUser = { id: row.id, username: row.username, name: row.name, role: row.role, busCode: row.bus_code }
+  const loginAt = nowIso()
+  await sqlRun('UPDATE users SET last_login = ? WHERE id = ?', [loginAt, user.id])
   await sqlRun(
-    "INSERT INTO audit_events (entity_type, entity_id, action, actor_id, actor_name, created_at) VALUES ('entry','login','viewed',?,?,?)",
-    [user.id, user.name, nowIso()],
+    "INSERT INTO audit_events (entity_type, entity_id, action, actor_id, actor_name, created_at) VALUES ('user',?,'viewed',?,?,?)",
+    [user.id, user.id, user.name, loginAt],
   )
   res.json({ token: signToken(user), user })
 })
+
+export const meHandler: RequestHandler = (req, res) => {
+  res.json({ user: req.user })
+}
 
 const requireAuthInner = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   const header = req.headers.authorization ?? ''

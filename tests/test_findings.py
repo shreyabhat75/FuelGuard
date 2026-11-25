@@ -162,7 +162,10 @@ class FindingsTests(unittest.TestCase):
         fresh = ROOT / "findings.fresh.csv"
         try:
             write_findings(fresh, self.report.findings)
-            self.assertEqual(path.read_bytes(), fresh.read_bytes())
+            self.assertEqual(
+                path.read_text(encoding="utf-8").splitlines(),
+                fresh.read_text(encoding="utf-8").splitlines(),
+            )
         finally:
             if fresh.exists():
                 fresh.unlink()

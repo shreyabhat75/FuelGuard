@@ -18,6 +18,14 @@ without copying credentials into GitHub.
 8. Open the URL shown for `fleetfuel-guard-web` and sign in with `driver`, `manager`,
    `accountant`, `principal` or `admin`; the demo password is `demo123`.
 
+To verify every deployed account from a local checkout:
+
+```powershell
+cd server
+$env:API_URL='https://fleetfuel-guard-api.onrender.com/api'
+npm run smoke:deployment
+```
+
 Service names can receive a suffix if one is already taken. The Blueprint uses Render service
 references, so a renamed hostname is still injected into the frontend and CORS configuration.
 

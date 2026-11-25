@@ -4,7 +4,7 @@
  * untouched so the app still works fully offline.
  */
 import { store } from './store'
-import type { FuelEntry, PhotoAttachment, Role, User } from '../types'
+import type { Bus, FuelEntry, PhotoAttachment, Role, User } from '../types'
 import type { RuleHit } from '../utils/rules'
 import { RAW } from '../data/raw'
 
@@ -43,26 +43,63 @@ const DEMO_USERNAMES: Record<string, string> = {
   'U-PRIN': 'principal',
 }
 
+const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms))
+
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_URL}${path}`, {
-    ...init,
-    headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(init?.headers ?? {}) },
-  })
-  if (res.status === 401 && !path.startsWith('/auth/login')) {
-    token = ''
-    localStorage.removeItem('ffg_token')
+  const method = (init?.method ?? 'GET').toUpperCase()
+  const canRetry = method === 'GET' || method === 'HEAD' || path === '/auth/login'
+  const attempts = canRetry ? 6 : 1
+  let lastError: Error | undefined
+
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    let res: Response
+    try {
+      res = await fetch(`${API_URL}${path}`, {
+        ...init,
+        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(init?.headers ?? {}) },
+      })
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error('Unable to reach the API')
+      if (attempt + 1 < attempts) {
+        await sleep(1000 * (attempt + 1))
+        continue
+      }
+      throw lastError
+    }
+
+    if ([502, 503, 504].includes(res.status) && attempt + 1 < attempts) {
+      await sleep(1200 * (attempt + 1))
+      continue
+    }
+    if (res.status === 401 && !path.startsWith('/auth/login')) {
+      token = ''
+      localStorage.removeItem('ffg_token')
+      store.set((s) => ({ ...s, currentUserId: null }))
+    }
+    let body: unknown = null
+    try {
+      body = await res.json()
+    } catch {
+      body = null
+    }
+    if (!res.ok) {
+      const fallback = [502, 503, 504].includes(res.status)
+        ? 'The API is waking up. Wait a few seconds and try again.'
+        : `Request failed (${res.status})`
+      throw new Error((body as { error?: string } | null)?.error ?? fallback)
+    }
+    return body as T
   }
-  let body: unknown = null
-  try {
-    body = await res.json()
-  } catch {
-    body = null
-  }
-  if (!res.ok) {
-    const message = (body as { error?: string } | null)?.error ?? `Request failed (${res.status})`
-    throw new Error(message)
-  }
-  return body as T
+
+  throw lastError ?? new Error('Unable to reach the API')
+}
+
+export function checkApiHealth() {
+  return req<{ ok: boolean; db: string; counts: Record<string, number> }>('/health')
+}
+
+export function hasSession(): boolean {
+  return Boolean(token)
 }
 
 /** Evidence URLs need the token inline because they render inside <img> tags. */
@@ -87,9 +124,17 @@ function mapEntry(e: any): FuelEntry {
 /** Replaces the data slices of the store with a fresh server snapshot. */
 export async function fetchBootstrap(): Promise<void> {
   const b = await req<Record<string, unknown>>('/bootstrap')
+  const serverUser = b.user as User
+  const serverUsers = (b.users as User[] | undefined) ?? []
   store.set((s) => ({
     ...s,
-    currentUserId: (b.user as { id: string }).id ?? s.currentUserId,
+    currentUserId: serverUser.id ?? s.currentUserId,
+    users: serverUsers.length
+      ? serverUsers
+      : s.users.some((u) => u.id === serverUser.id)
+        ? s.users.map((u) => (u.id === serverUser.id ? { ...u, ...serverUser } : u))
+        : [serverUser, ...s.users],
+    buses: (b.buses as Bus[] | undefined) ?? s.buses,
     entries: ((b.entries as unknown[]) ?? []).map(mapEntry),
     flags: (b.flags as never[]) ?? [],
     notes: (b.flagNotes as never[]) ?? [],
@@ -102,16 +147,21 @@ export async function fetchBootstrap(): Promise<void> {
   }))
 }
 
-export async function login(userId: string): Promise<void> {
-  const username = DEMO_USERNAMES[userId] ?? userId
-  const r = await req<{ token: string }>('/auth/login', {
+export async function login(
+  userId: string,
+  credentials?: { username: string; password: string },
+): Promise<User> {
+  const username = credentials?.username.trim() || DEMO_USERNAMES[userId] || userId
+  const password = credentials?.password || 'demo123'
+  const r = await req<{ token: string; user: User }>('/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username, password: 'demo123' }),
+    body: JSON.stringify({ username, password }),
   })
   token = r.token
   localStorage.setItem('ffg_token', token)
   await fetchBootstrap()
+  return r.user
 }
 
 export async function loginWithCredentials(username: string, password: string): Promise<User> {
@@ -160,6 +210,79 @@ export function logout(): void {
     corrections: [],
     audit: [],
   }))
+}
+
+export async function createUser(input: {
+  name: string
+  role: Role
+  username: string
+  password: string
+  phone?: string
+  busCode?: string
+}): Promise<User> {
+  const result = await req<{ user: User }>('/users', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...input, busCode: input.busCode || null }),
+  })
+  await fetchBootstrap()
+  return result.user
+}
+
+export async function updateUser(input: {
+  userId: string
+  username?: string
+  password?: string
+  status?: 'active' | 'suspended'
+  phone?: string
+  busCode?: string
+  reason: string
+}): Promise<User> {
+  const result = await req<{ user: User }>(`/users/${encodeURIComponent(input.userId)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      username: input.username,
+      password: input.password || undefined,
+      status: input.status,
+      phone: input.phone,
+      busCode: input.busCode === undefined ? undefined : input.busCode || null,
+      reason: input.reason,
+    }),
+  })
+  await fetchBootstrap()
+  return result.user
+}
+
+export async function createBus(input: {
+  busCode: string
+  registration: string
+  tankLitres: number
+  fuelType: 'diesel' | 'petrol' | 'cng'
+  gpsDevice?: string
+  driverId?: string
+}): Promise<Bus> {
+  const result = await req<{ bus: Bus }>('/buses', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...input, driverId: input.driverId || null }),
+  })
+  await fetchBootstrap()
+  return result.bus
+}
+
+export async function allocateBusDriver(input: {
+  busCode: string
+  driverId: string | null
+  reason: string
+}): Promise<Bus> {
+  const result = await req<{ bus: Bus }>(`/buses/${encodeURIComponent(input.busCode)}/driver`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ driverId: input.driverId, reason: input.reason }),
+  })
+  await fetchBootstrap()
+  return result.bus
 }
 
 async function photoToBlob(photo?: PhotoAttachment): Promise<File | null> {

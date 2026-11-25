@@ -1,4 +1,4 @@
-# FleetFuel Guard — Backend API (Person 2)
+# FleetFuel Guard — Backend API
 
 Base URL: `http://localhost:4000/api` · JSON over HTTP · Auth: `Authorization: Bearer <JWT>`
 JWTs are returned by `POST /auth/login` and expire after `TOKEN_TTL_HOURS` (default 12 h).
@@ -36,6 +36,9 @@ Health probe (public): `GET /api/health` → `{ ok, name, time, counts }`.
 | POST `/approvals` (escalate) | ✖ | ✔ | ✖ | ✖ | ✔ |
 | POST `/approvals/:id/decision` | ✖ | ✖ | ✖ | ✔ | ✔ |
 | GET `/dashboard`, `/audit`, `/bootstrap` | own scope | ✔ | ✔ | ✔ | ✔ |
+| GET/POST/PATCH `/users` | ✖ | ✖ | ✖ | ✖ | ✔ |
+| POST `/buses` | ✖ | ✖ | ✖ | ✖ | ✔ |
+| PATCH `/buses/:code/driver` | ✖ | ✔ | ✖ | ✖ | ✔ |
 
 Maker-checker: the submitter of an approval can never decide it (`403`), double decisions are blocked (`409`), and there are **no delete endpoints** — corrections and audit are append-only.
 
@@ -69,6 +72,11 @@ Maker-checker: the submitter of an approval can never decide it (`403`), double 
 | `GET /audit` | `entityType`, `entityId`, `limit` filters |
 | `GET /dashboard` | KPI aggregates: totals, modes, monthly, per-bus efficiency, flag/approval/reconciliation counts, recent fills |
 | `GET /reference` | prices, holidays, places |
+| `GET /users` | admin user directory; never returns password hashes or plaintext passwords |
+| `POST /users` | admin creates an account; hashes the supplied password and optionally assigns a driver to a bus |
+| `PATCH /users/:id` | admin updates username/password/status/phone/bus with a mandatory audit reason |
+| `POST /buses` | admin registers a bus and can atomically assign a driver |
+| `PATCH /buses/:code/driver` | admin/manager assigns or unassigns a driver transactionally |
 
 ## Status vocabulary (canonical)
 
@@ -92,9 +100,13 @@ Framing rule enforced in data: flags carry `reason` + `plain_explanation`; no fi
   PostgreSQL with no fallback, `DB_DRIVER=sqlite` forces SQLite (smoke tests use it). Identical
   schema on both engines — migration v1: `users, buses, fuel_entries, evidence, gps_pings,
   pump_statement_files, pump_statement_lines, flags, flag_notes, approvals, corrections,
-  audit_events, reconciliation_results, diesel_prices, college_calendar, places`.
+  audit_events, reconciliation_results, diesel_prices, college_calendar, places`; migration v2
+  stores evidence bytes in the database; migration v3 adds persistent admin user metadata and
+  user audit events.
 - `npm run import` (also runs automatically at boot): idempotent import of all seven CSVs — 8 buses, 112 register entries, 82 statement lines, 54,522 GPS pings, prices/calendar/places — plus seed of users, the 9 investigation cases from findings, 3 seeded approvals (submitted by the manager), reviewer decisions and audit history. Re-running never duplicates.
-- Evidence files live in `server/uploads/` (private) and are served only through `GET /evidence/:id/file` with a valid token.
+- New evidence files are stored in PostgreSQL/SQLite (migration v2), so they survive ephemeral
+  host restarts. Legacy local files remain readable from `server/uploads/`. All files are served
+  only through `GET /evidence/:id/file` with a valid token.
 
 ## Configuration
 
@@ -106,7 +118,8 @@ Copy `server/.env.example` → `server/.env`. All values have safe defaults; **s
 cd server
 npm install
 npm run dev        # tsx watch on :4000 (import + seed on boot)
-npm run smoke      # 53 end-to-end checks on a throwaway DB (:4010)
+npm run smoke      # 67 end-to-end checks on a throwaway DB (:4010)
+npm run smoke:deployment  # health + all five accounts against API_URL
 npm run build      # esbuild bundle → dist/server.cjs
 ```
 

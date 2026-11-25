@@ -1,5 +1,5 @@
 /**
- * End-to-end API smoke test for Person 2 deliverables.
+ * End-to-end API smoke test.
  * Boots a throwaway server instance (fresh SQLite DB) and exercises:
  * auth + RBAC, fuel entry creation with detection rules, offline-sync
  * idempotency, private evidence upload/serve, statement import + reconciliation,
@@ -103,6 +103,7 @@ async function main() {
     const health = await http('GET', '/health')
     ok('health is public', health.status === 200 && health.body.ok === true)
     const seededCounts = health.body.counts
+    ok('all five demo accounts are active', seededCounts.activeUsers === 5, JSON.stringify(seededCounts))
     ok(
       'historical data seeded (112 entries / 82 statement lines / 9 flags)',
       seededCounts.entries === 112 && seededCounts.statementLines === 82 && seededCounts.flags === 9,
@@ -125,6 +126,8 @@ async function main() {
       ok(`login ${label}`, r.status === 200 && r.body.token && r.body.user?.role, JSON.stringify(r.body).slice(0, 120))
       tokens[label] = r.body.token
     }
+    const me = await http('GET', '/auth/me', { token: tokens.driver })
+    ok('auth/me returns the token user', me.status === 200 && me.body.user?.username === 'driver')
 
     console.log('2. Role scoping')
     const driverBuses = await http('GET', '/buses', { token: tokens.driver })
@@ -319,6 +322,88 @@ async function main() {
     ok(
       'driver bootstrap is scoped (own bus only)',
       driverBootstrap.status === 200 && driverBootstrap.body.entries?.every((e: any) => e.busId === 'VB-07') && driverBootstrap.body.flags?.length === 0,
+    )
+
+    console.log('10. Real-time admin user + bus management')
+    const adminBootstrap = await http('GET', '/bootstrap', { token: tokens.admin })
+    ok(
+      'admin bootstrap includes authoritative users and buses',
+      adminBootstrap.status === 200 && adminBootstrap.body.users?.length === 5 && adminBootstrap.body.buses?.length === 8,
+    )
+    const managerCreateUser = await http('POST', '/users', {
+      token: tokens.manager,
+      json: { name: 'Blocked User', role: 'driver', username: 'blocked', password: 'secret123' },
+    })
+    ok('non-admin cannot create users (403)', managerCreateUser.status === 403)
+
+    const createdUser = await http('POST', '/users', {
+      token: tokens.admin,
+      json: {
+        name: 'API Test Driver',
+        role: 'driver',
+        username: 'apitestdriver',
+        password: 'secret123',
+        phone: '+91 90000 00000',
+      },
+    })
+    const createdUserId = createdUser.body.user?.id
+    ok(
+      'admin creates a persisted driver account',
+      createdUser.status === 201 && createdUser.body.user?.status === 'active' && !createdUser.body.user?.password,
+    )
+    const firstLogin = await http('POST', '/auth/login', { json: { username: 'apitestdriver', password: 'secret123' } })
+    ok('new account authenticates immediately', firstLogin.status === 200 && firstLogin.body.user?.id === createdUserId)
+
+    const suspended = await http('PATCH', `/users/${createdUserId}`, {
+      token: tokens.admin,
+      json: { status: 'suspended', reason: 'Smoke test suspension check.' },
+    })
+    ok('admin suspension persists', suspended.status === 200 && suspended.body.user?.status === 'suspended')
+    const suspendedLogin = await http('POST', '/auth/login', { json: { username: 'apitestdriver', password: 'secret123' } })
+    const suspendedSession = await http('GET', '/buses', { token: firstLogin.body.token })
+    ok('suspended account cannot login or keep using its token', suspendedLogin.status === 403 && suspendedSession.status === 401)
+
+    const reactivated = await http('PATCH', `/users/${createdUserId}`, {
+      token: tokens.admin,
+      json: {
+        password: 'changed123',
+        status: 'active',
+        busCode: 'VB-01',
+        reason: 'Smoke test reactivation and initial assignment.',
+      },
+    })
+    ok('reactivation, password reset and bus assignment persist', reactivated.status === 200 && reactivated.body.user?.busCode === 'VB-01')
+    const resetLogin = await http('POST', '/auth/login', { json: { username: 'apitestdriver', password: 'changed123' } })
+    ok('reset password works and old password is replaced', resetLogin.status === 200)
+
+    const createdBus = await http('POST', '/buses', {
+      token: tokens.admin,
+      json: {
+        busCode: 'VB-99',
+        registration: 'KA 99 VB 1099',
+        tankLitres: 180,
+        fuelType: 'diesel',
+        gpsDevice: 'GPS-VB-99',
+        driverId: createdUserId,
+      },
+    })
+    ok(
+      'admin creates a bus and transactionally reallocates its driver',
+      createdBus.status === 201 && createdBus.body.bus?.driverName === 'API Test Driver',
+    )
+    const assignedLogin = await http('POST', '/auth/login', { json: { username: 'apitestdriver', password: 'changed123' } })
+    ok('driver login reflects the new bus allocation', assignedLogin.body.user?.busCode === 'VB-99')
+
+    const unassigned = await http('PATCH', '/buses/VB-99/driver', {
+      token: tokens.admin,
+      json: { driverId: null, reason: 'Smoke test unassignment.' },
+    })
+    ok('driver unassignment persists on both bus and user', unassigned.status === 200 && unassigned.body.bus?.driverName === 'Unassigned')
+    const finalAdminBootstrap = await http('GET', '/bootstrap', { token: tokens.admin })
+    const finalUser = finalAdminBootstrap.body.users?.find((u: any) => u.id === createdUserId)
+    ok(
+      'admin bootstrap refreshes persisted users, buses and audit',
+      finalAdminBootstrap.body.buses?.length === 9 && !finalUser?.busCode && finalAdminBootstrap.body.audit?.some((e: any) => e.entityType === 'user' && e.entityId === createdUserId),
     )
   } finally {
     child.kill()

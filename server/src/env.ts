@@ -29,6 +29,13 @@ if (fs.existsSync(envFile)) {
   }
 }
 
+const nodeEnv = resolve('NODE_ENV', 'development')
+const corsValues = [resolve('CORS_ORIGIN', 'http://localhost:5173'), process.env.CORS_ORIGIN_FALLBACK]
+  .filter((value): value is string => Boolean(value?.trim()))
+const corsOrigins = corsValues.some((value) => value.trim() === '*')
+  ? '*'
+  : [...new Set(corsValues.flatMap((value) => value.split(',').map(origin)))]
+
 export const env = {
   port: Number(resolve('PORT', '4000')),
   jwtSecret: resolve('JWT_SECRET', 'dev-only-secret-change-me'),
@@ -40,9 +47,10 @@ export const env = {
   uploadDir: path.resolve(repoRoot, resolve('UPLOAD_DIR', 'server/uploads')),
   dataDir: path.resolve(repoRoot, resolve('DATA_DIR', 'intern_pack/intern_pack')),
   // Render service references expose a bare hostname; normalise it to an HTTPS origin.
-  corsOrigins: resolve('CORS_ORIGIN', 'http://localhost:5173').split(',').map(origin),
+  corsOrigins,
   tokenTtlHours: Number(resolve('TOKEN_TTL_HOURS', '12')),
-  isDev: resolve('NODE_ENV', 'development') !== 'production',
+  nodeEnv,
+  isDev: nodeEnv !== 'production',
 }
 
 if (env.isDev && env.jwtSecret === 'dev-only-secret-change-me') {

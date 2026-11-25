@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import {
   ArrowRight,
@@ -20,6 +20,7 @@ import { authenticate, currentUser } from '../services/api'
 import { useAppState } from '../services/store'
 import { Banner, Button, Card, Chip, Field, Modal, inputCls } from '../components/ui'
 import { Brand } from '../components/layouts'
+import { API_MODE, API_URL, checkApiHealth } from '../services/rest'
 
 interface InstitutionalAccount {
   role: string
@@ -33,7 +34,7 @@ interface InstitutionalAccount {
 const INSTITUTIONAL_ACCOUNTS: InstitutionalAccount[] = [
   {
     role: 'Administrator',
-    name: 'Anand Kumar',
+    name: 'System Admin',
     username: 'admin',
     password: 'demo123',
     description: 'Credential authority, user provisioning, bus allocations & security',
@@ -86,6 +87,22 @@ export default function Login() {
   const [forgotModalOpen, setForgotModalOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
+  const [apiStatus, setApiStatus] = useState<'checking' | 'ready' | 'error'>(API_MODE ? 'checking' : 'ready')
+
+  useEffect(() => {
+    if (!API_MODE) return
+    let active = true
+    checkApiHealth()
+      .then(() => {
+        if (active) setApiStatus('ready')
+      })
+      .catch(() => {
+        if (active) setApiStatus('error')
+      })
+    return () => {
+      active = false
+    }
+  }, [])
 
   if (user) return <Navigate to={user.role === 'driver' ? '/driver' : '/app'} replace />
 
@@ -137,7 +154,7 @@ export default function Login() {
               Enterprise Fleet Fuel Governance & Anomaly Detection
             </h1>
             <p className="mt-4 text-sm leading-relaxed text-slate-300">
-              Comprehensive platform for bus fleet fuel monitoring, automated pump statement reconciliation, and cryptographic audit security.
+              Comprehensive platform for bus fleet fuel monitoring, automated pump statement reconciliation, and append-only audit controls.
             </p>
 
             <div className="mt-8 space-y-4">
@@ -182,9 +199,9 @@ export default function Login() {
                   <ShieldCheck size={16} />
                 </div>
                 <div>
-                  <div className="text-xs font-semibold text-white">Immutable Audit Logging</div>
+                  <div className="text-xs font-semibold text-white">Append-Only Audit Logging</div>
                   <div className="text-xs text-slate-400">
-                    Every transaction, review note, and credential adjustment is cryptographically recorded.
+                    Every transaction, review note, and credential adjustment is recorded with its actor and timestamp.
                   </div>
                 </div>
               </div>
@@ -212,6 +229,28 @@ export default function Login() {
                 </p>
               </div>
             </div>
+
+            {API_MODE && apiStatus === 'checking' && (
+              <div className="mt-4">
+                <Banner tone="info" title="Connecting to the live API">
+                  A sleeping Render service can take a few seconds to wake up.
+                </Banner>
+              </div>
+            )}
+            {API_MODE && apiStatus === 'ready' && (
+              <div className="mt-4">
+                <Banner tone="success" title="Live API connected">
+                  Requests are using <span className="break-all">{API_URL}</span>.
+                </Banner>
+              </div>
+            )}
+            {API_MODE && apiStatus === 'error' && (
+              <div className="mt-4">
+                <Banner tone="warning" title="The API is still waking up">
+                  Sign in normally; temporary Render errors are retried automatically.
+                </Banner>
+              </div>
+            )}
 
             <form onSubmit={handleSubmit} className="mt-6 space-y-4">
               <Field label="Username" htmlFor="username" hint="Institutional account identifier" required>

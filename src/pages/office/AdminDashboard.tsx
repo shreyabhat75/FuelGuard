@@ -56,8 +56,6 @@ export default function AdminDashboard() {
       (ev) =>
         ev.entityType === 'user' ||
         ev.entityType === 'bus' ||
-        ev.action === 'created' ||
-        ev.action === 'updated' ||
         ev.entityId === 'session'
     )
   }, [s.audit])
@@ -100,7 +98,7 @@ export default function AdminDashboard() {
           <div>
             <div className="text-sm font-semibold">Zero-Trust Authentication Active</div>
             <div className="text-xs text-teal-700">
-              Signed in as {user?.name} (Administrator) · All credential modifications and vehicle allocations are cryptographically audited.
+              Signed in as {user?.name} (Administrator) · Credential modifications and vehicle allocations are recorded in the audit trail.
             </div>
           </div>
         </div>
@@ -142,7 +140,7 @@ export default function AdminDashboard() {
         <KpiCard
           label="Security Events"
           value={String(securityEvents.length)}
-          sub="Immutable audit trail"
+          sub="Append-only audit trail"
           icon={<Lock size={18} className="text-navy-600" />}
         />
       </div>
@@ -305,7 +303,7 @@ export default function AdminDashboard() {
         <Card>
           <CardHeader
             title="Recent Security & Access Logs"
-            subtitle="Immutable record of user provisioning, password resets, and allocations"
+            subtitle="Append-only record of user provisioning, password resets, and allocations"
             action={
               <Button size="sm" variant="secondary" onClick={() => nav('/app/admin/security')}>
                 Full Audit <ArrowRight size={14} />
